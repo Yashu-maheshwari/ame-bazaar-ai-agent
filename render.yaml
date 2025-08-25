@@ -1,0 +1,73 @@
+# =========================================================================
+# AME Bazaar AI Business Growth Agent - Render Blueprint (render.yaml)
+# Author: Gemini (Your AI Mentor & Strategist)
+# Version: 2.0 (Cost-Optimized & Fully Automated)
+# =========================================================================
+# This file defines the entire infrastructure for your n8n-based AI agent.
+# It provisions a web service to run n8n and a free PostgreSQL database
+# to ensure all your workflows, credentials, and data are saved permanently.
+# This is a professional "Infrastructure as Code" setup.
+# =========================================================================
+
+services:
+  # This section defines the n8n application itself.
+  - type: web
+    name: ame-bazaar-ai-agent
+    env: docker
+    # We use the official n8n Docker image. It's secure and always up-to-date.
+    dockerfilePath: ./Dockerfile
+    # Set the region closest to you or your customers for faster performance.
+    region: singapore
+    # We start with the 'starter' plan, which has a generous free tier.
+    plan: starter
+    # Health check path ensures Render knows if your app is running correctly.
+    healthCheckPath: /healthz
+    # Environment variables are the settings for your n8n instance.
+    envVars:
+      # Sets the correct Node.js version required by n8n.
+      - key: NODE_VERSION
+        value: 20
+      # Tells n8n how to connect to our free database.
+      # The 'fromDatabase' instruction is powerful - it automatically and
+      # securely injects the credentials from the database we define below.
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_HOST
+        fromDatabase:
+          name: ame-bazaar-database
+          property: host
+      - key: DB_POSTGRESDB_PORT
+        fromDatabase:
+          name: ame-bazaar-database
+          property: port
+      - key: DB_POSTGRESDB_DATABASE
+        fromDatabase:
+          name: ame-bazaar-database
+          property: database
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: ame-bazaar-database
+          property: user
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: ame-bazaar-database
+          property: password
+      # Sets the timezone to India Standard Time for accurate scheduling.
+      - key: GENERIC_TIMEZONE
+        value: Asia/Kolkata
+      # This is CRITICAL. It tells n8n its own public web address, which is
+      # essential for webhooks (like receiving approval messages) to work.
+      - key: WEBHOOK_URL
+        fromService:
+          type: web
+          name: ame-bazaar-ai-agent
+          property: url
+
+# This section defines your free, permanent database.
+databases:
+  - name: ame-bazaar-database
+    # We use PostgreSQL, a powerful and reliable open-source database.
+    databaseName: amebazaardb
+    user: amebazaaruser
+    # Render's free database tier is perfect for our needs.
+    plan: free
