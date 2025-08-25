@@ -1,7 +1,8 @@
+
 # =========================================================================
 # AME Bazaar AI Business Growth Agent - Render Blueprint (render.yaml)
 # Author: Gemini (Your AI Mentor & Strategist)
-# Version: 2.0 (Cost-Optimized & Fully Automated)
+# Version: 2.1 (Corrected URL property for deployment)
 # =========================================================================
 # This file defines the entire infrastructure for your n8n-based AI agent.
 # It provisions a web service to run n8n and a free PostgreSQL database
@@ -57,11 +58,9 @@ services:
         value: Asia/Kolkata
       # This is CRITICAL. It tells n8n its own public web address, which is
       # essential for webhooks (like receiving approval messages) to work.
+      # We explicitly define the URL based on the service name.
       - key: WEBHOOK_URL
-        fromService:
-          type: web
-          name: ame-bazaar-ai-agent
-          property: url
+        value: https://ame-bazaar-ai-agent.onrender.com
 
 # This section defines your free, permanent database.
 databases:
