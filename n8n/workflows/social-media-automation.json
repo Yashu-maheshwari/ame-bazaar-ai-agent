@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "AME Bazaar automation map\n\n\u2022 Runs 3 times daily (09:00, 14:00, 19:00 Asia/Kolkata)\n\u2022 Pulls 1 image from Google Drive source folder\n\u2022 Uploads to Cloudinary, adds logo overlay, and builds a premium poster URL\n\u2022 Sends poster to Gemini 1.5 Pro Vision for a Hinglish caption\n\u2022 Publishes to Instagram, Facebook Page, Threads, and Google Business Profile\n\u2022 Moves the source image to the Done folder to prevent duplicates\n\nReplace environment variables before activation:\nCLOUDINARY_CLOUD_NAME\nCLOUDINARY_UPLOAD_PRESET\nCLOUDINARY_LOGO_PUBLIC_ID\nGEMINI_API_KEY\nGOOGLE_DRIVE_ACCESS_TOKEN\nMETA_ACCESS_TOKEN\nTHREADS_ACCESS_TOKEN\nGBP_ACCESS_TOKEN\nAME_DRIVE_SOURCE_FOLDER_ID\nAME_DRIVE_DONE_FOLDER_ID\nIG_USER_ID\nFB_PAGE_ID\nTHREADS_USER_ID\nGBP_ACCOUNT_ID\nGBP_LOCATION_ID\n",
+        "content": "AME Bazaar automation map\n\n• Runs 3 times daily (09:00, 14:00, 19:00 Asia/Kolkata)\n• Pulls 1 image from Google Drive source folder\n• Uploads to Cloudinary, adds logo overlay, and builds a premium poster URL\n• Sends poster to Gemini 1.5 Pro Vision for a Hinglish caption\n• Publishes to Instagram, Facebook Page, Threads, and Google Business Profile\n• Moves the source image to the Done folder to prevent duplicates\n\nReplace environment variables before activation:\nCLOUDINARY_CLOUD_NAME\nCLOUDINARY_UPLOAD_PRESET\nCLOUDINARY_LOGO_PUBLIC_ID\nGEMINI_API_KEY\nGOOGLE_DRIVE_ACCESS_TOKEN\nMETA_ACCESS_TOKEN\nTHREADS_ACCESS_TOKEN\nGBP_ACCESS_TOKEN\nAME_DRIVE_SOURCE_FOLDER_ID\nAME_DRIVE_DONE_FOLDER_ID\nIG_USER_ID\nFB_PAGE_ID\nTHREADS_USER_ID\nGBP_ACCOUNT_ID\nGBP_LOCATION_ID\n",
         "height": 460,
         "width": 520,
         "color": 4
@@ -49,7 +49,7 @@
           "parameter": [
             {
               "name": "Authorization",
-              "value": "={{`Bearer ${$env.GOOGLE_DRIVE_ACCESS_TOKEN}`}}"
+              "value": "={{`Bearer ${$node['Google - Refresh Token'].json.access_token}`}}"
             }
           ]
         }
@@ -88,7 +88,7 @@
           "parameter": [
             {
               "name": "Authorization",
-              "value": "={{`Bearer ${$env.GOOGLE_DRIVE_ACCESS_TOKEN}`}}"
+              "value": "={{`Bearer ${$node['Google - Refresh Token'].json.access_token}`}}"
             }
           ]
         }
@@ -420,7 +420,7 @@
           "parameter": [
             {
               "name": "Authorization",
-              "value": "={{`Bearer ${$env.GOOGLE_DRIVE_ACCESS_TOKEN}`}}"
+              "value": "={{`Bearer ${$node['Google - Refresh Token'].json.access_token}`}}"
             }
           ]
         }
@@ -433,6 +433,44 @@
         5660,
         0
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://oauth2.googleapis.com/token",
+        "authentication": "none",
+        "sendBody": true,
+        "bodyContentType": "form-data",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "client_id",
+              "value": "={{$env.GOOGLE_DRIVE_CLIENT_ID}}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{$env.GOOGLE_DRIVE_CLIENT_SECRET}}"
+            },
+            {
+              "name": "refresh_token",
+              "value": "={{$env.GOOGLE_DRIVE_REFRESH_TOKEN}}"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "responseFormat": "json"
+      },
+      "id": "e93fbb8c-6e9f-431b-bd93-6b3a32bd3c3d",
+      "name": "Google - Refresh Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        740,
+        0
+      ]
     }
   ],
   "connections": {
@@ -440,7 +478,7 @@
       "main": [
         [
           {
-            "node": "Drive - List Images",
+            "node": "Google - Refresh Token",
             "type": "main",
             "index": 0
           }
@@ -661,6 +699,17 @@
         [
           {
             "node": "Drive - Move To Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google - Refresh Token": {
+      "main": [
+        [
+          {
+            "node": "Drive - List Images",
             "type": "main",
             "index": 0
           }

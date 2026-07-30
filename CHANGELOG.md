@@ -2,6 +2,13 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [1.1.0] - 2026-07-30
+### Added
+- Implemented automatic Google OAuth access token refresh node (`Google - Refresh Token`) inside the n8n social media workflow.
+- Replaced manually managed `GOOGLE_DRIVE_ACCESS_TOKEN` with automatic environment-driven refresh via `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, and `GOOGLE_DRIVE_REFRESH_TOKEN`.
+- Mapped all Google Drive nodes to dynamically query the refreshed access token from the new refresh node.
+- Updated `.env.example` template to reflect Google OAuth refresh parameters.
+
 ## [1.0.0] - 2026-07-30
 ### Added
 - Reorganized repository structure to support multiple sub-agents under `/agents/`.
