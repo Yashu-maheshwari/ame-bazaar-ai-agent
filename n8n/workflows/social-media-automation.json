@@ -1,4 +1,5 @@
 {
+  "id": "1",
   "name": "AME Bazaar - Social Media Automation Engine",
   "nodes": [
     {
@@ -212,7 +213,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={`https://graph.facebook.com/v25.0/${ $env.IG_USER_ID }/media?image_url=$={{encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}}&caption=$={{encodeURIComponent($node['Code - Extract Caption'].json.captionForPosts)}}&access_token=${ $env.META_ACCESS_TOKEN }`}",
+        "url": "={{`https://graph.facebook.com/v25.0/${$env.IG_USER_ID}/media?image_url=${encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}&caption=${encodeURIComponent($node['Code - Extract Caption'].json.captionForPosts)}&access_token=${$env.META_ACCESS_TOKEN}`}}",
         "authentication": "none",
         "responseFormat": "json",
         "sendBody": true
@@ -246,7 +247,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={`https://graph.facebook.com/v25.0/${ $env.IG_USER_ID }/media?image_url=$={{encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}}&media_type=STORIES&access_token=${ $env.META_ACCESS_TOKEN }`}",
+        "url": "={{`https://graph.facebook.com/v25.0/${$env.IG_USER_ID}/media?image_url=${encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}&media_type=STORIES&access_token=${$env.META_ACCESS_TOKEN}`}}",
         "authentication": "none",
         "responseFormat": "json",
         "sendBody": true
@@ -280,7 +281,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={`https://graph.facebook.com/v25.0/${ $env.FB_PAGE_ID }/photos?url=$={{encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}}&caption=$={{encodeURIComponent($node['Code - Extract Caption'].json.captionForPosts)}}&published=true&access_token=${ $env.META_ACCESS_TOKEN }`}",
+        "url": "={{`https://graph.facebook.com/v25.0/${$env.FB_PAGE_ID}/photos?url=${encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}&caption=${encodeURIComponent($node['Code - Extract Caption'].json.captionForPosts)}&published=true&access_token=${$env.META_ACCESS_TOKEN}`}}",
         "authentication": "none",
         "responseFormat": "json",
         "sendBody": true
@@ -314,7 +315,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={`https://graph.facebook.com/v25.0/${ $env.FB_PAGE_ID }/stories?url=$={{encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}}&access_token=${ $env.META_ACCESS_TOKEN }`}",
+        "url": "={{`https://graph.facebook.com/v25.0/${$env.FB_PAGE_ID}/stories?url=${encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}&access_token=${$env.META_ACCESS_TOKEN}`}}",
         "authentication": "none",
         "responseFormat": "json",
         "sendBody": true
@@ -348,7 +349,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={`https://graph.threads.net/v1.0/${ $env.THREADS_USER_ID }/threads?media_type=IMAGE&image_url=$={{encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}}&text=$={{encodeURIComponent($node['Code - Extract Caption'].json.captionForPosts)}}&access_token=${ $env.THREADS_ACCESS_TOKEN }`}",
+        "url": "={{`https://graph.threads.net/v1.0/${$env.THREADS_USER_ID}/threads?media_type=IMAGE&image_url=${encodeURIComponent($node['Code - Extract Caption'].json.cloudinaryPosterUrl)}&text=${encodeURIComponent($node['Code - Extract Caption'].json.captionForPosts)}&access_token=${$env.THREADS_ACCESS_TOKEN}`}}",
         "authentication": "none",
         "responseFormat": "json",
         "sendBody": true
