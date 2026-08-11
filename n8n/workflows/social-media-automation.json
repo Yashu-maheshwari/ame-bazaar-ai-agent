@@ -24,7 +24,7 @@
             "interval": [
               {
                 "field": "cronExpression",
-                "expression": "0 0 9,14,19 * * *"
+                "expression": "0 0 11,14,19 * * *"
               }
             ]
           }
@@ -65,10 +65,10 @@
       },
       {
         "parameters": {
-          "jsCode": "return [{\n      json: {\n        fileId: \"dummy\",\n        fileName: \"test_fashion.jpg\",\n        mimeType: \"image/jpeg\",\n        sourceModifiedTime: new Date().toISOString(),\n        driveSourceFolderId: \"dummy\",\n        driveDoneFolderId: \"dummy\"\n      }\n    }];"
+          "jsCode": "const fs = require('fs');\nconst statePath = 'C:\\\\Users\\\\user\\\\.gemini\\\\antigravity\\\\scratch\\\\ame-bazaar-ai-agent\\\\n8n_state.json';\n\nfunction getISTDateString() {\n  const d = new Date();\n  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });\n  return formatter.format(d);\n}\n\nfunction getISTHourMinute() {\n  const d = new Date();\n  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });\n  return formatter.format(d);\n}\n\nconst todayStr = getISTDateString();\nconst currentTimeStr = getISTHourMinute();\n\nlet state = { dailyPlan: null };\nif (fs.existsSync(statePath)) {\n  try {\n    state = JSON.parse(fs.readFileSync(statePath, 'utf8'));\n  } catch (e) {}\n}\n\nif (!state.dailyPlan || state.dailyPlan.date !== todayStr) {\n  const slots = ['11:00', '14:00', '19:00'];\n  const planSlots = {};\n  const pool = [];\n  \n  if (pool.length === 0) {\n    const categories = ['BOYS', 'WOMEN', 'MEN'];\n    categories.forEach(cat => {\n      pool.push({\n        fileId: `mock_${cat}_file_id`,\n        fileName: `mock_${cat}_image.jpg`,\n        mimeType: 'image/jpeg',\n        category: cat,\n        sourceSubFolderId: 'dummy',\n        doneSubFolderId: 'dummy',\n        cloudinaryPosterUrl: \"https://res.cloudinary.com/demo/image/upload/sample.jpg\"\n      });\n    });\n  }\n  \n  const byCategory = {};\n  pool.forEach(item => {\n    if (!byCategory[item.category]) byCategory[item.category] = [];\n    byCategory[item.category].push(item);\n  });\n  \n  const categories = Object.keys(byCategory);\n  slots.forEach((slot, index) => {\n    const cat = categories[index % categories.length];\n    if (cat && byCategory[cat].length > 0) {\n      const chosen = byCategory[cat].shift();\n      planSlots[slot] = {\n        ...chosen,\n        status: 'pending'\n      };\n    }\n  });\n  \n  state.dailyPlan = {\n    date: todayStr,\n    slots: planSlots\n  };\n  fs.writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf8');\n}\n\nconst dailyPlan = state.dailyPlan;\nconst slots = Object.keys(dailyPlan.slots).sort();\nlet selectedSlot = null;\nlet selectedTask = null;\n\nfor (const slot of slots) {\n  const task = dailyPlan.slots[slot];\n  if (task.status === 'pending') {\n    if (currentTimeStr >= slot) {\n      selectedSlot = slot;\n      selectedTask = task;\n      break;\n    }\n  }\n}\n\nif (selectedTask) {\n  return [{\n    json: {\n      matchedSlot: selectedSlot,\n      ...selectedTask,\n      driveSourceFolderId: 'dummy',\n      driveDoneFolderId: 'dummy'\n    }\n  }];\n}\n\nreturn [];"
         },
         "id": "a72be18b",
-        "name": "Code - Pick First File",
+        "name": "Code - Daily Queue Coordinator",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
@@ -222,7 +222,7 @@
         "typeVersion": 4,
         "position": [
           3020,
-          0
+          225
         ]
       },
       {
@@ -485,6 +485,30 @@
           3100,
           -100
         ]
+      },
+      {
+        "parameters": {},
+        "id": "on-startup-trigger-id",
+        "name": "On startup",
+        "type": "n8n-nodes-base.onStartup",
+        "typeVersion": 1,
+        "position": [
+          620,
+          -150
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const fs = require('fs');\nconst statePath = 'C:\\\\Users\\\\user\\\\.gemini\\\\antigravity\\\\scratch\\\\ame-bazaar-ai-agent\\\\n8n_state.json';\n\nconst matchedSlot = $node['Code - Daily Queue Coordinator']?.json?.matchedSlot;\n\nif (matchedSlot && fs.existsSync(statePath)) {\n  try {\n    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));\n    if (state.dailyPlan && state.dailyPlan.slots[matchedSlot]) {\n      state.dailyPlan.slots[matchedSlot].status = 'completed';\n      fs.writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf8');\n      console.log(\`Slot \${matchedSlot} marked as completed.\`);\n    }\n  } catch (e) {}\n}\n\nreturn [{ json: { success: true } }];"
+        },
+        "id": "update-state-node-id",
+        "name": "Code - Update State",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          5900,
+          0
+        ]
       }
     ],
     "connections": {
@@ -492,14 +516,14 @@
         "main": [
           [
             {
-              "node": "Code - Pick First File",
+              "node": "Code - Daily Queue Coordinator",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Code - Pick First File": {
+      "Code - Daily Queue Coordinator": {
         "main": [
           [
             {
@@ -724,6 +748,28 @@
           [
             {
               "node": "Instagram - Publish Feed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "On startup": {
+        "main": [
+          [
+            {
+              "node": "Code - Daily Queue Coordinator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Drive - Move To Done": {
+        "main": [
+          [
+            {
+              "node": "Code - Update State",
               "type": "main",
               "index": 0
             }
