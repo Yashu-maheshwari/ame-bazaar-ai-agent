@@ -5,3 +5,12 @@ FROM n8nio/n8n
 ENV N8N_LISTEN_ADDRESS=0.0.0.0
 ENV N8N_PORT=5678
 EXPOSE 5678
+
+# Copy custom docker-entrypoint wrapper to dynamically parse DATABASE_URL
+USER root
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+USER node
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["n8n", "start"]

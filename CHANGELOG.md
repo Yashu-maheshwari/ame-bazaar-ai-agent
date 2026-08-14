@@ -2,6 +2,10 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [3.4.0] - 2026-08-14
+### Added
+- Created `docker-entrypoint.sh` container startup wrapper that dynamically extracts `DB_TYPE=postgresdb`, `DB_POSTGRESDB_HOST`, `DB_POSTGRESDB_PORT`, `DB_POSTGRESDB_DATABASE`, `DB_POSTGRESDB_USER`, `DB_POSTGRESDB_PASSWORD`, and `DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED=false` from `DATABASE_URL` at runtime for n8n.
+
 ## [3.3.0] - 2026-08-14
 ### Fixed
 - Resolved n8n `"Database ping failed (1): Database connection timed out"` by adding `DB_TYPE=postgresdb`, `DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED=false`, and `DB_POSTGRESDB_CONNECTION_TIMEOUT_MS=30000` in `render.yaml` (v3.3) for n8n's TypeORM pool on Supabase Transaction Pooler (port 6543).
@@ -31,7 +35,7 @@ All notable changes to the AME Bazaar AI Agent project will be documented in thi
 - Created production-safe Supabase database adapter (`scripts/db.js`) supporting SSL connection strings and offline mock fallback (`MOCK_DB=true`).
 - Created cloud orchestrator HTTP webhook entrypoint (`scripts/webhook.js`) for `/health` checks and `/webhook/trigger` agent slot dispatches.
 - Expanded automated test suite (`tests/orchestrator.test.js`) to 16 test cases covering DB adapter validation, query access, transaction rollbacks, failure handling, and webhook endpoint processing (16/16 PASSED).
-- Created `PROJECT_STATUS.md` documenting cloud architecture status and deployment readiness.
+- Created `PROJECT_STATUS.md` documenting cloud architecture status and readiness.
 
 ## [2.0.0] - 2026-08-14
 ### Added
