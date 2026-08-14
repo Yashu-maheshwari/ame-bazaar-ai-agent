@@ -2,34 +2,33 @@
 
 ## Baseline & Target Architecture
 - **Source Control**: GitHub (`Yashu-maheshwari/ame-bazaar-ai-agent`)
-- **Authoritative State**: Supabase PostgreSQL DB (`aws-0-ap-northeast-1.pooler.supabase.com`)
-- **Central Scheduler / Orchestrator**: Cloud Orchestrator (`scripts/orchestrator.js` & `scripts/webhook.js`)
-- **First Production Agent**: Social Media Automation (`social-media-automation.json`)
-- **Scheduled Slots**: `11:00`, `14:00`, `19:00` Asia/Kolkata (IST)
+- **Target Runtime**: Google Apps Script (GAS) 100% Serverless Cloud Infrastructure
+- **Authoritative State / Log**: Google Sheets (`SocialMediaLog` via `gas/SheetService.gs`)
+- **Media Hosting**: Google Drive (`INPUT_FOLDER_ID`, `POSTED_FOLDER_ID`) & Cloudinary (`gas/CloudinaryService.gs`)
+- **AI Generation**: Gemini 2.5 Flash API (`gas/GeminiService.gs`)
+- **Social Publishing**: Meta Graph API for Instagram Feed & Facebook Page (`gas/MetaService.gs`)
+- **Scheduled Slots**: `11:00`, `14:00`, `19:00` Asia/Kolkata (IST) via Time-Driven Triggers (`setupTriggers()`)
 
 ---
 
-## Phase Status Summary
+## Architecture Migration Status
 
-| Phase | Description | Status | Verification |
-|---|---|---|---|
-| **Phase 1** | Supabase PostgreSQL DDL Schema | **COMPLETE** | `database/migrations/001_initial_schema.sql` verified |
-| **Phase 2** | Central Orchestrator & Idempotency Locking | **COMPLETE** | 16/16 Automated Tests Passed |
-| **Phase 3** | DB Adapter & Cloud Webhook Entrypoint | **COMPLETE** | `scripts/db.js` & `scripts/webhook.js` implemented & tested |
-| **Phase 4** | Live Supabase DB Setup & Migration | **COMPLETE** | `001_initial_schema.sql` executed & verified on live Supabase DB |
-| **Phase 5** | Live DB Lock Verification Test | **COMPLETE** | Live lock acquisition & duplicate rejection verified on Supabase DB |
-| **Phase 6** | Cloud Staging Deployment & Real Post | **READY FOR STAGING** | Render blueprint `render.yaml` v3.0 ready |
+| Component | Status | Verification |
+|---|---|---|
+| **Google Apps Script Core (`gas/Code.gs`)** | **COMPLETE** | `runAgent()`, `runTest()`, `setupTriggers()`, `LockService` locking |
+| **Configuration Manager (`gas/Config.gs`)** | **COMPLETE** | `PropertiesService` wrapper, `TEST_MODE`, `setupConfig()` |
+| **Execution Log & Duplicate Lock (`gas/SheetService.gs`)** | **COMPLETE** | `SocialMediaLog` sheet, File ID duplicate check |
+| **Google Drive File Management (`gas/DriveService.gs`)** | **COMPLETE** | Unprocessed image listing, base64 extraction, file movement |
+| **Gemini AI Caption Engine (`gas/GeminiService.gs`)** | **COMPLETE** | Preserved Hinglish brand prompt, multimodal base64 image parsing |
+| **Public Image URL Hosting (`gas/CloudinaryService.gs`)** | **COMPLETE** | Unsigned upload preset for Instagram Graph API image URL |
+| **Meta Graph API Engine (`gas/MetaService.gs`)** | **COMPLETE** | Instagram Container & Publish, Facebook Page Photo Publish, retry safety |
+| **Automated Test Suite (`gas/Tests.gs`)** | **COMPLETE** | 5 unit test functions covering config, sheets, Gemini, Meta & triggers |
+| **Migration Documentation (`MIGRATION_GAS.md`)** | **COMPLETE** | Full migration map, obsolete components list, setup guide |
 
 ---
 
 ## Safety Safeguards Active
-- **Production Workflow Touched**: **NO** (`n8n/workflows/social-media-automation.json` untouched)
-- **Credentials Touched**: **NO** (No production tokens or API keys altered)
-- **Real Social Post Published**: **NO**
-- **Live Supabase Connection Uptime**: **100%** (7 tables, core agents & schedules verified)
-- **Automated Test Suite**: **16/16 PASSED**
-
----
-
-## Next Steps
-Perform controlled cloud deployment / staging execution on Render web services.
+- **Production Workflow Touched**: **NO** (`n8n/workflows/social-media-automation.json` untouched & preserved)
+- **Credentials Touched**: **NO** (All credentials managed securely via `PropertiesService`)
+- **Real Social Post Published**: **NO** (Safe `TEST_MODE=true` default active)
+- **Automated Test Suite**: **PASSED**

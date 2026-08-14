@@ -2,6 +2,13 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [4.0.0] - 2026-08-14
+### Added
+- Completed 100% serverless Google Apps Script (GAS) migration replacing Node.js, n8n, Render, and SQL database infrastructure.
+- Created `gas/appsscript.json`, `gas/Config.gs`, `gas/SheetService.gs`, `gas/DriveService.gs`, `gas/CloudinaryService.gs`, `gas/GeminiService.gs`, `gas/MetaService.gs`, `gas/Code.gs`, and `gas/Tests.gs`.
+- Implemented `LockService` execution lock, `PropertiesService` secret management, `TEST_MODE` safety switch, `SocialMediaLog` Google Sheets execution history, and `setupTriggers()` for 11:00, 14:00, 19:00 IST daily schedules.
+- Created `MIGRATION_GAS.md` documenting component mapping, obsolete components, required script properties, and first test procedure.
+
 ## [3.4.0] - 2026-08-14
 ### Added
 - Created `docker-entrypoint.sh` container startup wrapper that dynamically extracts `DB_TYPE=postgresdb`, `DB_POSTGRESDB_HOST`, `DB_POSTGRESDB_PORT`, `DB_POSTGRESDB_DATABASE`, `DB_POSTGRESDB_USER`, `DB_POSTGRESDB_PASSWORD`, and `DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED=false` from `DATABASE_URL` at runtime for n8n.
