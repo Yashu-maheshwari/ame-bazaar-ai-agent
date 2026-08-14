@@ -2,6 +2,13 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [3.0.0] - 2026-08-14
+### Added
+- Executed `database/migrations/001_initial_schema.sql` against live Supabase PostgreSQL DB (`aws-0-ap-northeast-1.pooler.supabase.com`).
+- Verified core tables, indices, and seeded Social Media Agent schedules (`11:00`, `14:00`, `19:00` IST).
+- Completed live DB lock acquisition and idempotency duplicate key rejection tests on Supabase PostgreSQL.
+- Verified 16/16 automated unit & integration test cases.
+
 ## [2.2.0] - 2026-08-14
 ### Added
 - Updated Render blueprint (`render.yaml` v3.0) to configure Cloud Orchestrator service and external Supabase PostgreSQL connection.

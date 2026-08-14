@@ -75,7 +75,10 @@ Migrate from local Windows n8n daemon to cloud orchestrator using Supabase Postg
 
 All 16 tests passed cleanly offline. Production workflows and credentials remain untouched.
 
-### Phase 4 - Live Supabase Setup Preparation & Render Blueprint (2026-08-14)
-- Prepared Render deployment blueprint (`render.yaml` v3.0) for both n8n engine and central orchestrator service.
-- Configured external Supabase PostgreSQL connection parameter (`DATABASE_URL`) without storing or exposing secrets in code/repo.
-- Awaiting user input of live `DATABASE_URL` string to run `database/migrations/001_initial_schema.sql` against live Supabase PostgreSQL DB.
+### Phase 4 - Live Supabase Setup & Migration Verification (2026-08-14)
+- **Database Connection**: Successfully connected to live Supabase PostgreSQL (`aws-0-ap-northeast-1.pooler.supabase.com`).
+- **DDL Execution**: Applied `database/migrations/001_initial_schema.sql`. Verified all 7 core tables (`agents`, `schedules`, `executions`, `idempotency_keys`, `content_items`, `platform_publish_results`, `recovery_events`).
+- **Seeded Configuration**: Verified Social Media Agent seeding & default schedules (`11:00:00`, `14:00:00`, `19:00:00` IST).
+- **Live DB Lock & Idempotency Test**: Executed live lock acquisition and confirmed unique constraint `(agent_id, scheduled_slot, business_date)` rejection of duplicate keys on live Supabase DB. Cleaned up test records.
+- **Full Test Suite**: 16/16 automated test cases passed.
+- **Production Safety**: Zero social posts published, zero production workflows modified, zero secrets committed to Git.

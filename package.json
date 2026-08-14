@@ -1,0 +1,21 @@
+{
+  "name": "ame-bazaar-ai-agent",
+  "version": "3.0.0",
+  "description": "Master repository hosting the multi-agent automation framework for AME Bazaar. This library runs on n8n and is deployed on Render.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node tests/orchestrator.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yashu-maheshwari/ame-bazaar-ai-agent.git"
+  },
+  "dependencies": {
+    "pg": "^8.13.3"
+  },
+  "license": "ISC"
+}
