@@ -753,7 +753,7 @@ function runTest() {
 }
 
 /**
- * Setup Time-Driven Scheduled Triggers (11:00, 14:00, 19:00 IST daily)
+ * Setup Time-Driven Scheduled Triggers (08:00 IST daily)
  */
 function setupTriggers() {
   const triggers = ScriptApp.getProjectTriggers();
@@ -765,29 +765,13 @@ function setupTriggers() {
 
   ScriptApp.newTrigger('runAgent')
     .timeBased()
-    .atHour(11)
+    .atHour(8)
     .nearMinute(0)
     .everyDays(1)
     .inTimezone('Asia/Kolkata')
     .create();
 
-  ScriptApp.newTrigger('runAgent')
-    .timeBased()
-    .atHour(14)
-    .nearMinute(0)
-    .everyDays(1)
-    .inTimezone('Asia/Kolkata')
-    .create();
-
-  ScriptApp.newTrigger('runAgent')
-    .timeBased()
-    .atHour(19)
-    .nearMinute(0)
-    .everyDays(1)
-    .inTimezone('Asia/Kolkata')
-    .create();
-
-  Logger.log("✓ Created 3 daily scheduled triggers for runAgent (11:00, 14:00, 19:00 IST).");
+  Logger.log("✓ Created 1 daily scheduled trigger for runAgent (08:00 IST).");
 }
 
 
