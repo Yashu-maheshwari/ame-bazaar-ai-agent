@@ -83,3 +83,4 @@ All 16 tests passed cleanly offline. Production workflows and credentials remain
 - **Full Test Suite**: 16/16 automated test cases passed.
 - **Production Safety**: Zero social posts published, zero production workflows modified, zero secrets committed to Git.
 - **Render Free Tier Blueprint (`render.yaml` v3.1)**: Updated `plan: starter` ($7/mo paid) to `plan: free` ($0/mo) for both `ame-bazaar-ai-agent` and `ame-bazaar-orchestrator` services to eliminate credit card / payment method requirements during Render Blueprint creation.
+- **Render n8n HTTP 502 Fix (`Dockerfile` & `render.yaml` v3.2)**: Configured `N8N_LISTEN_ADDRESS=0.0.0.0`, `N8N_PORT=5678`, `PORT=5678`, and `EXPOSE 5678` so the n8n Docker container binds to all interfaces and aligns with Render's reverse proxy router, resolving HTTP 502 Bad Gateway errors.

@@ -1,7 +1,7 @@
 # =========================================================================
 # AME Bazaar AI Business Growth Agent - Render Blueprint (render.yaml)
 # Author: Gemini (Your AI Mentor & Strategist)
-# Version: 3.1 (100% Free Tier Configuration)
+# Version: 3.2 (n8n Port Binding & Render Routing Fix)
 # =========================================================================
 
 services:
@@ -16,6 +16,12 @@ services:
     envVars:
       - key: GENERIC_TIMEZONE
         value: Asia/Kolkata
+      - key: N8N_LISTEN_ADDRESS
+        value: 0.0.0.0
+      - key: N8N_PORT
+        value: "5678"
+      - key: PORT
+        value: "5678"
       - key: WEBHOOK_URL
         value: https://ame-bazaar-ai-agent.onrender.com
       - key: DATABASE_URL

@@ -2,6 +2,10 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [3.2.0] - 2026-08-14
+### Fixed
+- Fixed HTTP 502 Bad Gateway on `ame-bazaar-ai-agent` Render Docker web service by adding `N8N_LISTEN_ADDRESS=0.0.0.0`, `N8N_PORT=5678`, `PORT=5678`, and `EXPOSE 5678` in `Dockerfile` and `render.yaml` (v3.2).
+
 ## [3.1.0] - 2026-08-14
 ### Changed
 - Updated `render.yaml` blueprint (v3.1) from `plan: starter` (paid) to `plan: free` (100% free $0/mo tier) for both services (`ame-bazaar-ai-agent` and `ame-bazaar-orchestrator`) to prevent Render payment prompt during Blueprint creation.
