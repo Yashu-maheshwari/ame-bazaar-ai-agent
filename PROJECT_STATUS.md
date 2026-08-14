@@ -16,8 +16,8 @@
 | **Phase 1** | Supabase PostgreSQL DDL Schema | **COMPLETE** | `database/migrations/001_initial_schema.sql` verified |
 | **Phase 2** | Central Orchestrator & Idempotency Locking | **COMPLETE** | 16/16 Automated Tests Passed |
 | **Phase 3** | DB Adapter & Cloud Webhook Entrypoint | **COMPLETE** | `scripts/db.js` & `scripts/webhook.js` implemented & tested |
-| **Phase 4** | Cloud Database Provisioning | **PENDING** | Requires user `DATABASE_URL` string when applying schema to Supabase |
-| **Phase 5** | Production Staging Deployment & Real Post | **PENDING** | Requires controlled staging trigger before real post |
+| **Phase 4** | Live Supabase DB Setup & Migration | **AWAITING DATABASE_URL** | Prepared; requires user `DATABASE_URL` for live execution |
+| **Phase 5** | Production Staging Deployment & Real Post | **PENDING** | Blueprint ready in `render.yaml` v3.0 |
 
 ---
 
@@ -29,8 +29,5 @@
 
 ---
 
-## Next Steps
-1. User provisions Supabase PostgreSQL project and sets `DATABASE_URL`.
-2. Apply `database/migrations/001_initial_schema.sql` to Supabase DB.
-3. Deploy Orchestrator webhook to cloud runtime (Render / Serverless / GitHub Actions).
-4. Run controlled staging verification.
+## Remaining Blocker
+Awaiting user to provide the live Supabase PostgreSQL connection string (`DATABASE_URL`). Once provided, migration `001_initial_schema.sql` and live DB lock testing will run immediately.

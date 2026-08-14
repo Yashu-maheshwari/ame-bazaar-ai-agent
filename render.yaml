@@ -1,15 +1,11 @@
 # =========================================================================
 # AME Bazaar AI Business Growth Agent - Render Blueprint (render.yaml)
 # Author: Gemini (Your AI Mentor & Strategist)
-# Version: 2.2 (Final - Robust Database Connection)
-# =========================================================================
-# This version fixes the database connection race condition by using the
-# more resilient 'connectionString' instead of the internal host property.
-# This ensures the web service can always find the database, even if it's slow to start.
+# Version: 3.0 (Cloud Orchestrator + Supabase PostgreSQL Architecture)
 # =========================================================================
 
 services:
-  # This section defines the n8n application itself.
+  # 1. n8n Engine Web Service
   - type: web
     name: ame-bazaar-ai-agent
     env: docker
@@ -18,23 +14,26 @@ services:
     plan: starter
     healthCheckPath: /healthz
     envVars:
-      # Sets the timezone to India Standard Time for accurate scheduling.
       - key: GENERIC_TIMEZONE
         value: Asia/Kolkata
-      # This is CRITICAL. It tells n8n its own public web address.
       - key: WEBHOOK_URL
         value: https://ame-bazaar-ai-agent.onrender.com
-      # This is the NEW, more robust way to connect to the database.
-      # n8n automatically understands this single DATABASE_URL variable.
       - key: DATABASE_URL
-        fromDatabase:
-          name: ame-bazaar-database
-          property: connectionString
+        sync: false
 
-# This section defines your free, permanent database.
-databases:
-  - name: ame-bazaar-database
-    databaseName: amebazaardb
-    user: amebazaaruser
-    plan: free
-
+  # 2. Central Cloud Orchestrator & Webhook Engine
+  - type: web
+    name: ame-bazaar-orchestrator
+    env: node
+    region: singapore
+    plan: starter
+    buildCommand: npm install --only=production || true
+    startCommand: node scripts/webhook.js
+    healthCheckPath: /health
+    envVars:
+      - key: GENERIC_TIMEZONE
+        value: Asia/Kolkata
+      - key: DATABASE_URL
+        sync: false
+      - key: MOCK_DB
+        value: "false"

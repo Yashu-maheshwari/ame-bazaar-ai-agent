@@ -74,3 +74,8 @@ Migrate from local Windows n8n daemon to cloud orchestrator using Supabase Postg
 16. Cloud Webhook Entrypoint `/health` endpoint processing: **PASS**
 
 All 16 tests passed cleanly offline. Production workflows and credentials remain untouched.
+
+### Phase 4 - Live Supabase Setup Preparation & Render Blueprint (2026-08-14)
+- Prepared Render deployment blueprint (`render.yaml` v3.0) for both n8n engine and central orchestrator service.
+- Configured external Supabase PostgreSQL connection parameter (`DATABASE_URL`) without storing or exposing secrets in code/repo.
+- Awaiting user input of live `DATABASE_URL` string to run `database/migrations/001_initial_schema.sql` against live Supabase PostgreSQL DB.

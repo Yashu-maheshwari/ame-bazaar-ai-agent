@@ -2,6 +2,11 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [2.2.0] - 2026-08-14
+### Added
+- Updated Render blueprint (`render.yaml` v3.0) to configure Cloud Orchestrator service and external Supabase PostgreSQL connection.
+- Prepared database migration and live orchestrator test pipeline awaiting user `DATABASE_URL`.
+
 ## [2.1.0] - 2026-08-14
 ### Added
 - Created production-safe Supabase database adapter (`scripts/db.js`) supporting SSL connection strings and offline mock fallback (`MOCK_DB=true`).
