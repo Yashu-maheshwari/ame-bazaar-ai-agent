@@ -9,7 +9,7 @@
   },
   "scripts": {
     "test": "node tests/orchestrator.test.js",
-    "push:gas": "clasp push"
+    "push:gas": "npx @google/clasp push --force"
   },
   "repository": {
     "type": "git",
