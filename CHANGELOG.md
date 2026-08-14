@@ -2,6 +2,10 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [4.3.1] - 2026-08-14
+### Fixed
+- Strengthened Gemini caption prompt in `gas/Code.gs` to explicitly forbid unverified product claims (quality, comfort, fabric type, fitting, durability, affordability, price, or availability) unless visually supported by the image.
+
 ## [4.3.0] - 2026-08-14
 ### Changed
 - Improved Gemini social media caption prompt in `gas/Code.gs` for local conversion focus: natural casual Hinglish, 120-word limit, Kirari (Delhi) location integration, strong CTA for store visits & WhatsApp (9953569533), 4-5 hashtags, and strict visual accuracy rules (no hallucinated fabrics, prices, or cheap blanket discounts).

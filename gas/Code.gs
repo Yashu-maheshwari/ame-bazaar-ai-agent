@@ -3,7 +3,7 @@
  * AME Bazaar AI Business Growth Agent - Complete Single-File GAS System
  * Author: Antigravity AI & AME Bazaar Engineering
  * Target Environment: Google Apps Script (GAS V8 Runtime)
- * Version: 4.3 (Conversion-Focused Local Caption Prompt Update)
+ * Version: 4.3.1 (Strict Visual Claim Verification Prompt Patch)
  * =========================================================================
  * 
  * Includes:
@@ -374,7 +374,7 @@ const GeminiService = {
     'You are the growth marketer for AME Bazaar, a trusted family clothing store in Kirari, Delhi.',
     'Write a conversion-focused, natural casual Hinglish social media caption (max 120 words) using the English alphabet.',
     'Start immediately with a strong, attention-grabbing hook. Avoid generic questions or filler phrases.',
-    'Describe ONLY what is visually and clearly shown in the image. Never invent unverified fabric, stretch, price, offers, sizes, or quality claims.',
+    'Describe ONLY what is visually and clearly visible in the image. NEVER claim quality, comfort, fabric type, fitting, durability, affordability, price, or availability unless explicitly visible. If a feature cannot be visually verified, do NOT mention it.',
     'Do NOT use fake urgency, cheap sales language, or cheap blanket discounts.',
     'Naturally mention AME Bazaar and Kirari in the body.',
     'End with a clear, strong CTA inviting customers to visit our store at Kirari, Delhi or WhatsApp us at 9953569533 for details and orders.',
