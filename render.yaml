@@ -1,17 +1,17 @@
 # =========================================================================
 # AME Bazaar AI Business Growth Agent - Render Blueprint (render.yaml)
 # Author: Gemini (Your AI Mentor & Strategist)
-# Version: 3.0 (Cloud Orchestrator + Supabase PostgreSQL Architecture)
+# Version: 3.1 (100% Free Tier Configuration)
 # =========================================================================
 
 services:
-  # 1. n8n Engine Web Service
+  # 1. n8n Engine Web Service (Free Tier)
   - type: web
     name: ame-bazaar-ai-agent
     env: docker
     dockerfilePath: ./Dockerfile
     region: singapore
-    plan: starter
+    plan: free
     healthCheckPath: /healthz
     envVars:
       - key: GENERIC_TIMEZONE
@@ -21,12 +21,12 @@ services:
       - key: DATABASE_URL
         sync: false
 
-  # 2. Central Cloud Orchestrator & Webhook Engine
+  # 2. Central Cloud Orchestrator & Webhook Engine (Free Tier)
   - type: web
     name: ame-bazaar-orchestrator
     env: node
     region: singapore
-    plan: starter
+    plan: free
     buildCommand: npm install --only=production || true
     startCommand: node scripts/webhook.js
     healthCheckPath: /health

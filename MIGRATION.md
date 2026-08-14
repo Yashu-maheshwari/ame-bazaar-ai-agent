@@ -82,3 +82,4 @@ All 16 tests passed cleanly offline. Production workflows and credentials remain
 - **Live DB Lock & Idempotency Test**: Executed live lock acquisition and confirmed unique constraint `(agent_id, scheduled_slot, business_date)` rejection of duplicate keys on live Supabase DB. Cleaned up test records.
 - **Full Test Suite**: 16/16 automated test cases passed.
 - **Production Safety**: Zero social posts published, zero production workflows modified, zero secrets committed to Git.
+- **Render Free Tier Blueprint (`render.yaml` v3.1)**: Updated `plan: starter` ($7/mo paid) to `plan: free` ($0/mo) for both `ame-bazaar-ai-agent` and `ame-bazaar-orchestrator` services to eliminate credit card / payment method requirements during Render Blueprint creation.

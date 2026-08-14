@@ -2,6 +2,10 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [3.1.0] - 2026-08-14
+### Changed
+- Updated `render.yaml` blueprint (v3.1) from `plan: starter` (paid) to `plan: free` (100% free $0/mo tier) for both services (`ame-bazaar-ai-agent` and `ame-bazaar-orchestrator`) to prevent Render payment prompt during Blueprint creation.
+
 ## [3.0.0] - 2026-08-14
 ### Added
 - Executed `database/migrations/001_initial_schema.sql` against live Supabase PostgreSQL DB (`aws-0-ap-northeast-1.pooler.supabase.com`).
