@@ -2,6 +2,10 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [3.3.0] - 2026-08-14
+### Fixed
+- Resolved n8n `"Database ping failed (1): Database connection timed out"` by adding `DB_TYPE=postgresdb`, `DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED=false`, and `DB_POSTGRESDB_CONNECTION_TIMEOUT_MS=30000` in `render.yaml` (v3.3) for n8n's TypeORM pool on Supabase Transaction Pooler (port 6543).
+
 ## [3.2.0] - 2026-08-14
 ### Fixed
 - Fixed HTTP 502 Bad Gateway on `ame-bazaar-ai-agent` Render Docker web service by adding `N8N_LISTEN_ADDRESS=0.0.0.0`, `N8N_PORT=5678`, `PORT=5678`, and `EXPOSE 5678` in `Dockerfile` and `render.yaml` (v3.2).

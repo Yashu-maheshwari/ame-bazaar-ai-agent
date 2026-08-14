@@ -1,7 +1,7 @@
 # =========================================================================
 # AME Bazaar AI Business Growth Agent - Render Blueprint (render.yaml)
 # Author: Gemini (Your AI Mentor & Strategist)
-# Version: 3.2 (n8n Port Binding & Render Routing Fix)
+# Version: 3.3 (n8n Supabase Database Ping & SSL Timeout Fix)
 # =========================================================================
 
 services:
@@ -24,6 +24,12 @@ services:
         value: "5678"
       - key: WEBHOOK_URL
         value: https://ame-bazaar-ai-agent.onrender.com
+      - key: DB_TYPE
+        value: postgresdb
+      - key: DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED
+        value: "false"
+      - key: DB_POSTGRESDB_CONNECTION_TIMEOUT_MS
+        value: "30000"
       - key: DATABASE_URL
         sync: false
 
