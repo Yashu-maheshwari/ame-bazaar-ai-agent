@@ -2,6 +2,20 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [2.1.0] - 2026-08-14
+### Added
+- Created production-safe Supabase database adapter (`scripts/db.js`) supporting SSL connection strings and offline mock fallback (`MOCK_DB=true`).
+- Created cloud orchestrator HTTP webhook entrypoint (`scripts/webhook.js`) for `/health` checks and `/webhook/trigger` agent slot dispatches.
+- Expanded automated test suite (`tests/orchestrator.test.js`) to 16 test cases covering DB adapter validation, query access, transaction rollbacks, failure handling, and webhook endpoint processing (16/16 PASSED).
+- Created `PROJECT_STATUS.md` documenting cloud architecture status and deployment readiness.
+
+## [2.0.0] - 2026-08-14
+### Added
+- Created Supabase PostgreSQL schema DDL migration script (`database/migrations/001_initial_schema.sql`) covering `agents`, `schedules`, `executions`, `idempotency_keys`, `content_items`, `platform_publish_results`, and `recovery_events`.
+- Created Central Orchestrator module (`scripts/orchestrator.js`) enforcing slot evaluation, deterministic idempotency locks `(agent_id, scheduled_slot, business_date)`, missed slot recovery, and future slot protection.
+- Created automated offline test suite (`tests/orchestrator.test.js`) covering 11 validation requirements (DDL, lock acquisition, Asia/Kolkata timezone, 11/14/19 IST slots, shuffling, recovery, future protection, idempotency, multi-agent, restart, failure tracking). Passed 11/11 tests.
+- Updated `MIGRATION.md` and `implementation_plan.md`.
+
 ## [1.2.0] - 2026-07-31
 ### Added
 - Configured local `.env` with the new valid `GOOGLE_DRIVE_REFRESH_TOKEN` provided by the user.
