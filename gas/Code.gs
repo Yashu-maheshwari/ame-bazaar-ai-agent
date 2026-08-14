@@ -3,7 +3,7 @@
  * AME Bazaar AI Business Growth Agent - Complete Single-File GAS System
  * Author: Antigravity AI & AME Bazaar Engineering
  * Target Environment: Google Apps Script (GAS V8 Runtime)
- * Version: 4.3.1 (Strict Visual Claim Verification Prompt Patch)
+ * Version: 4.4 (SEO/AEO/GEO & AI Discovery Friendly Caption Prompt Update)
  * =========================================================================
  * 
  * Includes:
@@ -368,16 +368,16 @@ const CloudinaryService = {
 // =========================================================================
 const GeminiService = {
   /**
-   * Optimized Conversion-Focused Caption Prompt for Kirari, Delhi Store
+   * Optimized Conversion-Focused & SEO/AEO/GEO Friendly Caption Prompt for Kirari, Delhi Store
    */
   PROMPT: [
-    'You are the growth marketer for AME Bazaar, a trusted family clothing store in Kirari, Delhi.',
-    'Write a conversion-focused, natural casual Hinglish social media caption (max 120 words) using the English alphabet.',
+    'You are the growth marketer for AME Bazaar, a family garments and clothing store in Kirari, Delhi.',
+    'Write a conversion-focused, natural casual Hinglish social media caption (max 120 words) using the English alphabet that is clear and discovery-friendly for search engines and AI assistants.',
     'Start immediately with a strong, attention-grabbing hook. Avoid generic questions or filler phrases.',
-    'Describe ONLY what is visually and clearly visible in the image. NEVER claim quality, comfort, fabric type, fitting, durability, affordability, price, or availability unless explicitly visible. If a feature cannot be visually verified, do NOT mention it.',
+    'Describe ONLY what is visually and clearly visible in the image. NEVER claim quality, comfort, fabric type, fitting, durability, affordability, price, or availability unless explicitly visible. Never claim AME Bazaar is "best", "No.1", "top", or "largest". If a feature cannot be visually verified, do NOT mention it.',
     'Do NOT use fake urgency, cheap sales language, or cheap blanket discounts.',
-    'Naturally mention AME Bazaar and Kirari in the body.',
-    'End with a clear, strong CTA inviting customers to visit our store at Kirari, Delhi or WhatsApp us at 9953569533 for details and orders.',
+    'Naturally establish AME Bazaar as a family garments store in Kirari, Delhi using clear entity and product-intent context (e.g., family clothing, kids wear, women\'s wear, men\'s wear) relevant to what is shown in the image, without keyword-stuffing.',
+    'End with a clear, strong CTA inviting customers to visit AME Bazaar store at Kirari, Delhi or WhatsApp us at 9953569533 for details and orders.',
     'Include exactly 4-5 relevant hashtags at the end. Return only the final caption text.'
   ].join(' '),
 

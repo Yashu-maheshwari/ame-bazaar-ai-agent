@@ -2,6 +2,10 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [4.4.0] - 2026-08-14
+### Changed
+- Enhanced Gemini social media caption prompt in `gas/Code.gs` for SEO/AEO/GEO & AI assistant discovery: naturally maps `AME Bazaar` = `family garments and clothing store` = `Kirari, Delhi`, uses non-stuffed intent terms (family clothing, kids wear, women's wear, men's wear), explicitly forbids unverified superlative claims ("best", "No.1", "top", "largest"), and preserves all approved conversion CTA rules.
+
 ## [4.3.1] - 2026-08-14
 ### Fixed
 - Strengthened Gemini caption prompt in `gas/Code.gs` to explicitly forbid unverified product claims (quality, comfort, fabric type, fitting, durability, affordability, price, or availability) unless visually supported by the image.
