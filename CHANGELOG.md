@@ -2,6 +2,10 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [4.3.0] - 2026-08-14
+### Changed
+- Improved Gemini social media caption prompt in `gas/Code.gs` for local conversion focus: natural casual Hinglish, 120-word limit, Kirari (Delhi) location integration, strong CTA for store visits & WhatsApp (9953569533), 4-5 hashtags, and strict visual accuracy rules (no hallucinated fabrics, prices, or cheap blanket discounts).
+
 ## [4.2.0] - 2026-08-14
 ### Security
 - Masked all secret keys and tokens in `setupConfig()` output in `gas/Code.gs` to display only `CONFIGURED` or `MISSING` status, preventing credential exposure in GAS execution logs.

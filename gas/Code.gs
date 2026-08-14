@@ -3,7 +3,7 @@
  * AME Bazaar AI Business Growth Agent - Complete Single-File GAS System
  * Author: Antigravity AI & AME Bazaar Engineering
  * Target Environment: Google Apps Script (GAS V8 Runtime)
- * Version: 4.2 (Security Patch: Credential Masking in Logging)
+ * Version: 4.3 (Conversion-Focused Local Caption Prompt Update)
  * =========================================================================
  * 
  * Includes:
@@ -368,15 +368,17 @@ const CloudinaryService = {
 // =========================================================================
 const GeminiService = {
   /**
-   * Preserved AME Bazaar Brand Caption Prompt
+   * Optimized Conversion-Focused Caption Prompt for Kirari, Delhi Store
    */
   PROMPT: [
-    'You are the growth marketer for AME Bazaar, a premium family garment retail brand.',
-    'Write a highly engaging Hinglish caption for this image.',
-    'Tone: premium, trustworthy, stylish, warm, conversion-focused.',
-    'Do NOT offer cheap blanket discounts.',
-    'Focus on quality, trust, fit, and store experience.',
-    'Return only the caption text with 8-15 relevant hashtags at the end.'
+    'You are the growth marketer for AME Bazaar, a trusted family clothing store in Kirari, Delhi.',
+    'Write a conversion-focused, natural casual Hinglish social media caption (max 120 words) using the English alphabet.',
+    'Start immediately with a strong, attention-grabbing hook. Avoid generic questions or filler phrases.',
+    'Describe ONLY what is visually and clearly shown in the image. Never invent unverified fabric, stretch, price, offers, sizes, or quality claims.',
+    'Do NOT use fake urgency, cheap sales language, or cheap blanket discounts.',
+    'Naturally mention AME Bazaar and Kirari in the body.',
+    'End with a clear, strong CTA inviting customers to visit our store at Kirari, Delhi or WhatsApp us at 9953569533 for details and orders.',
+    'Include exactly 4-5 relevant hashtags at the end. Return only the final caption text.'
   ].join(' '),
 
   /**
