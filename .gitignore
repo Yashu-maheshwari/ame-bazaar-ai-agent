@@ -3,6 +3,7 @@
 .env.local
 .env.*.local
 *.env
+.clasprc.json
 
 # Dependency directories
 node_modules/

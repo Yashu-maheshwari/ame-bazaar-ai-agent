@@ -8,7 +8,8 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "node tests/orchestrator.test.js"
+    "test": "node tests/orchestrator.test.js",
+    "push:gas": "clasp push"
   },
   "repository": {
     "type": "git",
@@ -16,6 +17,9 @@
   },
   "dependencies": {
     "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.3.0"
   },
   "license": "ISC"
 }

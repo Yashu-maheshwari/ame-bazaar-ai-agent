@@ -2,6 +2,11 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [4.5.0] - 2026-08-14
+### Added
+- Configured `.clasp.json` linking `rootDir: "gas"` to existing Google Apps Script project (`1PERF3o5OMpYfbH8ePPC0HDNQEHEnWFfF7hE1ZPEQ6e84UAeYlSl1S_q7`).
+- Added `@google/clasp` devDependency and `npm run push:gas` script for 1-command GitHub/local code synchronization to Google Apps Script.
+
 ## [4.4.0] - 2026-08-14
 ### Changed
 - Enhanced Gemini social media caption prompt in `gas/Code.gs` for SEO/AEO/GEO & AI assistant discovery: naturally maps `AME Bazaar` = `family garments and clothing store` = `Kirari, Delhi`, uses non-stuffed intent terms (family clothing, kids wear, women's wear, men's wear), explicitly forbids unverified superlative claims ("best", "No.1", "top", "largest"), and preserves all approved conversion CTA rules.
