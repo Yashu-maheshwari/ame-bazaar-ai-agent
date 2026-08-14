@@ -2,6 +2,10 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [4.5.1] - 2026-08-14
+### Added
+- Added `.claspignore` to restrict Clasp synchronization exclusively to master `gas/Code.gs` and `gas/appsscript.json`, ignoring legacy modular `.gs` files and preventing duplicate symbol definitions on Google Apps Script.
+
 ## [4.5.0] - 2026-08-14
 ### Added
 - Configured `.clasp.json` linking `rootDir: "gas"` to existing Google Apps Script project (`1PERF3o5OMpYfbH8ePPC0HDNQEHEnWFfF7hE1ZPEQ6e84UAeYlSl1S_q7`).
