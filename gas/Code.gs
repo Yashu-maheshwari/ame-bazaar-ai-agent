@@ -3,7 +3,7 @@
  * AME Bazaar AI Business Growth Agent - Complete Single-File GAS System
  * Author: Antigravity AI & AME Bazaar Engineering
  * Target Environment: Google Apps Script (GAS V8 Runtime)
- * Version: 4.1 (Merged Self-Contained Project)
+ * Version: 4.2 (Security Patch: Credential Masking in Logging)
  * =========================================================================
  * 
  * Includes:
@@ -72,9 +72,28 @@ const Config = {
 };
 
 /**
- * Interactive Setup & Configuration Helper
+ * Interactive Setup & Configuration Helper (Safe Status Logging)
  */
 function setupConfig() {
+  const cfg = Config.getConfig();
+  const getStatus = function(val) {
+    return (val !== null && val !== undefined && String(val).trim() !== '') ? 'CONFIGURED' : 'MISSING';
+  };
+
+  const safeReport = {
+    inputFolderId: getStatus(cfg.inputFolderId),
+    postedFolderId: getStatus(cfg.postedFolderId),
+    errorFolderId: getStatus(cfg.errorFolderId),
+    spreadsheetId: getStatus(cfg.spreadsheetId),
+    geminiApiKey: getStatus(cfg.geminiApiKey),
+    metaAccessToken: getStatus(cfg.metaAccessToken),
+    metaPageId: getStatus(cfg.metaPageId),
+    instagramAccountId: getStatus(cfg.instagramAccountId),
+    cloudinaryCloudName: getStatus(cfg.cloudinaryCloudName),
+    cloudinaryUploadPreset: getStatus(cfg.cloudinaryUploadPreset),
+    testMode: cfg.testMode
+  };
+
   Logger.log("==================================================");
   Logger.log("AME BAZAAR AI AGENT - SCRIPT PROPERTIES SETUP");
   Logger.log("==================================================");
@@ -90,8 +109,8 @@ function setupConfig() {
   Logger.log("9. CLOUDINARY_CLOUD_NAME     : Cloudinary Cloud Name (for Instagram Public Image URL)");
   Logger.log("10. CLOUDINARY_UPLOAD_PRESET : Cloudinary Unsigned Upload Preset");
   Logger.log("11. TEST_MODE                : 'true' (safety mode, no real posts) or 'false' (live publishing)");
-  Logger.log("\nCurrent Config State:");
-  Logger.log(JSON.stringify(Config.getConfig(), null, 2));
+  Logger.log("\nCurrent Config Status (Secrets Masked):");
+  Logger.log(JSON.stringify(safeReport, null, 2));
   Logger.log("==================================================");
 }
 

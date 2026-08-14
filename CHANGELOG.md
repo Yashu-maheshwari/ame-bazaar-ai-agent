@@ -2,6 +2,10 @@
 
 All notable changes to the AME Bazaar AI Agent project will be documented in this file.
 
+## [4.2.0] - 2026-08-14
+### Security
+- Masked all secret keys and tokens in `setupConfig()` output in `gas/Code.gs` to display only `CONFIGURED` or `MISSING` status, preventing credential exposure in GAS execution logs.
+
 ## [4.0.0] - 2026-08-14
 ### Added
 - Completed 100% serverless Google Apps Script (GAS) migration replacing Node.js, n8n, Render, and SQL database infrastructure.
