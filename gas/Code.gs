@@ -129,7 +129,11 @@ const SheetService = {
     'Post ID',
     'Post URL',
     'Error',
-    'Execution ID'
+    'Execution ID',
+    'Product Category',
+    'Alt Text',
+    'Content Type',
+    'Location Intent'
   ],
 
   /**
@@ -230,10 +234,38 @@ const SheetService = {
       entry.postId || '',
       entry.postUrl || '',
       entry.error || '',
-      entry.executionId || ''
+      entry.executionId || '',
+      entry.productCategory || '',
+      entry.altText || '',
+      entry.contentType || 'FEED_POST',
+      entry.localIntent || ''
     ];
 
     sheet.appendRow(row);
+  },
+
+  /**
+   * Fetch the last N successful captions to prevent repetition
+   */
+  getRecentCaptions: function(config, limit = 5) {
+    const sheet = this.getLogSheet(config);
+    const data = sheet.getDataRange().getValues();
+    const recentCaptions = [];
+    
+    // Iterate backwards from the last row
+    for (let i = data.length - 1; i > 0; i--) {
+      const rowStatus = String(data[i][5]).trim();
+      const rowCaption = String(data[i][4]).trim();
+      
+      // Look for successful, unique captions (ignore TEST_MODE prefixed or generic errors)
+      if (rowStatus === 'SUCCESS' && rowCaption && !rowCaption.startsWith('[TEST_MODE]')) {
+        if (!recentCaptions.includes(rowCaption)) {
+          recentCaptions.push(rowCaption);
+        }
+      }
+      if (recentCaptions.length >= limit) break;
+    }
+    return recentCaptions;
   }
 };
 
@@ -372,7 +404,7 @@ const GeminiService = {
    */
   PROMPT: [
     'You are the growth marketer for AME Bazaar, a family garments and clothing store in Kirari, Delhi.',
-    'Write a natural, casual Hinglish social media caption (maximum 100 words) using the English alphabet, optimized for search engines, AI assistants, and AEO/GEO discovery.',
+    'Write a natural, casual Hinglish social media caption (approximately 80-130 words) using the English alphabet, optimized for search engines, AI assistants, and AEO/GEO discovery.',
     'Start immediately with a strong, product-focused hook identifying the visible apparel.',
     'Naturally establish the entity relationship: AME Bazaar = family garments & clothing store = Kirari, Delhi.',
     'Use relevant local search and product-intent terms (e.g., kids wear, women\'s wear, men\'s wear, family clothing) based on the image, without keyword stuffing.',
@@ -381,25 +413,31 @@ const GeminiService = {
     'Never invent or guess the price, fabric material, size, discount, or availability of the item.',
     'Do not claim superiority like "best", "No.1", or "top".',
     'End with a clear CTA inviting customers to visit AME Bazaar store in Kirari, Delhi, or WhatsApp us at 9953569533.',
-    'Include exactly 4-5 relevant hashtags at the end. Return only the final caption text.'
+    'Include exactly 4-5 relevant hashtags at the end.',
+    'OUTPUT FORMAT: You must return a strict JSON object with exactly these keys: "caption" (the final text), "alt_text" (concise, descriptive image alt text for accessibility, NOT included in the public caption), "product_category" (short string identifying the visual product category, e.g. "kids wear"), "local_intent" (short string identifying the local phrasing used, e.g. "Kirari"). Do NOT wrap the JSON in Markdown formatting like ```json.'
   ].join(' '),
 
   /**
    * Generate Hinglish caption for an image using Gemini API via UrlFetchApp
    */
-  generateCaption: function(config, imageData) {
+  generateCaption: function(config, imageData, recentCaptions = []) {
     if (!config.geminiApiKey) {
       throw new Error("GEMINI_API_KEY is missing in Script Properties.");
     }
 
     const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(config.geminiApiKey);
 
+    let promptText = this.PROMPT;
+    if (recentCaptions && recentCaptions.length > 0) {
+      promptText += '\n\nIMPORTANT REPETITION CONTROL:\nHere are the last few captions we published. DO NOT use similar opening hooks, identical paragraph structures, or exactly the same hashtag combinations. Provide a fresh angle:\n' + recentCaptions.map((c, i) => `[${i+1}] ${c}`).join('\n');
+    }
+
     const payload = {
       contents: [
         {
           role: "user",
           parts: [
-            { text: this.PROMPT },
+            { text: promptText },
             {
               inlineData: {
                 mimeType: imageData.mimeType || "image/jpeg",
@@ -411,7 +449,8 @@ const GeminiService = {
       ],
       generationConfig: {
       temperature: 0.3,
-      maxOutputTokens: 300
+      maxOutputTokens: 500,
+      responseMimeType: "application/json"
     }
     };
 
@@ -434,17 +473,75 @@ const GeminiService = {
     const result = JSON.parse(responseText);
     const candidates = result.candidates || [];
     
-    let caption = '';
+    let rawText = '';
     if (candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {
-      caption = candidates[0].content.parts.map(p => p.text || '').join('\n').trim();
+      rawText = candidates[0].content.parts.map(p => p.text || '').join('\n').trim();
     }
 
-    if (!caption) {
-      throw new Error("Gemini API returned an empty caption response.");
+    if (!rawText) {
+      throw new Error("Gemini API returned an empty response.");
+    }
+    
+    rawText = rawText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+
+    let parsedResult;
+    try {
+      parsedResult = JSON.parse(rawText);
+    } catch(e) {
+      throw new Error("Gemini API failed to return valid JSON: " + rawText);
     }
 
-    Logger.log("✓ Gemini caption generated successfully.");
-    return caption;
+    if (!parsedResult.caption) {
+      throw new Error("Gemini JSON is missing the 'caption' field.");
+    }
+
+    const finalCaption = parsedResult.caption.trim();
+    
+    // ---------------------------------------------------------
+    // HARD QUALITY GATES
+    // ---------------------------------------------------------
+    if (!finalCaption) {
+      throw new Error("Quality Gate Failed: Caption is empty.");
+    }
+    
+    const lowerCaption = finalCaption.toLowerCase();
+    
+    if (!lowerCaption.includes("ame bazaar")) {
+      throw new Error("Quality Gate Failed: Caption missing brand entity (AME Bazaar).");
+    }
+    
+    if (!lowerCaption.includes("kirari") && !lowerCaption.includes("delhi")) {
+      throw new Error("Quality Gate Failed: Caption missing local entity context (Kirari/Delhi).");
+    }
+    
+    if (!lowerCaption.match(/(visit ame bazaar|visit us|visit our store|store par|store visit|whatsapp|9953569533|contact)/)) {
+      throw new Error("Quality Gate Failed: Caption missing a clear CTA.");
+    }
+
+    const hashtags = finalCaption.match(/#[\w]+/g) || [];
+    if (hashtags.length < 4 || hashtags.length > 5) {
+      throw new Error("Quality Gate Failed: Caption must contain exactly 4-5 hashtags. Found: " + hashtags.length);
+    }
+    
+    const labels = ["seo:", "aeo:", "geo:", "caption:", "alt text:", "reasoning:", "analysis:"];
+    for (const label of labels) {
+      if (lowerCaption.includes(label)) {
+        throw new Error("Quality Gate Failed: Output contains internal label (" + label + ").");
+      }
+    }
+
+    if (lowerCaption.match(/\b(and|or|the|is|in|on|at|to|with|for|ki|ka|ke|se|mein|aur|par)\s*$/)) {
+      throw new Error("Quality Gate Failed: Caption appears truncated (ends with dangling word).");
+    }
+    // ---------------------------------------------------------
+
+    Logger.log("✓ Gemini JSON metadata generated successfully.");
+    return {
+      caption: finalCaption,
+      altText: parsedResult.alt_text || '',
+      productCategory: parsedResult.product_category || '',
+      localIntent: parsedResult.local_intent || ''
+    };
   }
 };
 
@@ -477,7 +574,7 @@ const MetaService = {
     const createUrl = "https://graph.facebook.com/" + this.GRAPH_API_VERSION + "/" + encodeURIComponent(config.instagramAccountId) + "/media";
     const createPayload = {
       image_url: publicImageUrl,
-      media_type: 'STORIES',
+      caption: caption,
       access_token: config.metaAccessToken
     };
 
@@ -631,10 +728,14 @@ function runAgent() {
 
       let caption = "";
       let publicImageUrl = "";
+      let geminiOutput = {};
 
       try {
         const imageData = DriveService.getImageData(item.fileObj);
-        caption = GeminiService.generateCaption(config, imageData);
+        const recentCaptions = SheetService.getRecentCaptions(config, 5);
+        geminiOutput = GeminiService.generateCaption(config, imageData, recentCaptions);
+        
+        caption = geminiOutput.caption;
         if (config.testMode) {
           caption = "[TEST_MODE] " + caption;
         }
@@ -654,7 +755,11 @@ function runAgent() {
               postId: fbResult.postId,
               postUrl: fbResult.postUrl,
               error: '',
-              executionId: executionId
+              executionId: executionId,
+              productCategory: geminiOutput.productCategory,
+              altText: geminiOutput.altText,
+              contentType: 'FEED_POST',
+              localIntent: geminiOutput.localIntent
             });
             fbSuccess = true;
           } catch (err) {
@@ -668,7 +773,11 @@ function runAgent() {
               postId: '',
               postUrl: '',
               error: err.message,
-              executionId: executionId
+              executionId: executionId,
+              productCategory: geminiOutput.productCategory,
+              altText: geminiOutput.altText,
+              contentType: 'FEED_POST',
+              localIntent: geminiOutput.localIntent
             });
           }
         } else {
@@ -688,7 +797,11 @@ function runAgent() {
               postId: igResult.postId,
               postUrl: igResult.postUrl,
               error: '',
-              executionId: executionId
+              executionId: executionId,
+              productCategory: geminiOutput.productCategory,
+              altText: geminiOutput.altText,
+              contentType: 'FEED_POST',
+              localIntent: geminiOutput.localIntent
             });
             igSuccess = true;
           } catch (err) {
@@ -702,7 +815,11 @@ function runAgent() {
               postId: '',
               postUrl: '',
               error: err.message,
-              executionId: executionId
+              executionId: executionId,
+              productCategory: geminiOutput.productCategory,
+              altText: geminiOutput.altText,
+              contentType: 'FEED_POST',
+              localIntent: geminiOutput.localIntent
             });
           }
         } else {
@@ -726,12 +843,16 @@ function runAgent() {
           fileId: item.id,
           fileName: item.name,
           platform: 'ALL',
-          caption: caption,
+          caption: caption || err.message,
           status: 'FAILED',
           postId: '',
           postUrl: '',
           error: err.message,
-          executionId: executionId
+          executionId: executionId,
+          productCategory: geminiOutput.productCategory || '',
+          altText: geminiOutput.altText || '',
+          contentType: 'FEED_POST',
+          localIntent: geminiOutput.localIntent || ''
         });
       }
     }
@@ -821,6 +942,9 @@ function runAllTests() {
   runTest("Test 3: Gemini Prompt Construction & Validation", testGeminiPromptValidation);
   runTest("Test 4: Meta Graph API Request Construction (Test Mode)", testMetaRequestConstruction);
   runTest("Test 5: Trigger Setup & Handler Registration", testTriggerSetup);
+  runTest("Test 6: Duplicate Caption Prevention Retrieval", testDuplicateCaptionPrevention);
+  runTest("Test 7: Backward Compatible Logging Headers", testBackwardCompatibleLogging);
+  runTest("Test 8: Strict Caption Quality Gates", testCaptionQualityGates);
 
   Logger.log("\n==================================================");
   Logger.log("TEST SUMMARY: " + passed + " PASSED, " + failed + " FAILED");
@@ -866,6 +990,7 @@ function testGeminiPromptValidation() {
   if (!prompt.includes("Hinglish")) throw new Error("Prompt missing Hinglish requirement");
   if (!prompt.includes("Kirari, Delhi")) throw new Error("Prompt missing local entity-discovery context");
   if (!prompt.includes("AEO/GEO")) throw new Error("Prompt missing AEO/GEO optimization instruction");
+  if (!prompt.includes("OUTPUT FORMAT: You must return a strict JSON object")) throw new Error("Prompt missing JSON schema instruction");
 }
 
 function testMetaRequestConstruction() {
@@ -885,6 +1010,103 @@ function testMetaRequestConstruction() {
 function testTriggerSetup() {
   const mockConfig = Config.getConfig();
   if (mockConfig.timeZone !== 'Asia/Kolkata') throw new Error("TimeZone must be Asia/Kolkata");
+}
+
+function testDuplicateCaptionPrevention() {
+  const mockConfig = Config.getConfig();
+  const recentCaptions = SheetService.getRecentCaptions(mockConfig, 5);
+  if (!Array.isArray(recentCaptions)) throw new Error("getRecentCaptions did not return an array");
+}
+
+function testBackwardCompatibleLogging() {
+  const headers = SheetService.HEADERS;
+  if (headers.length !== 14) throw new Error("Sheet headers should be exactly 14 to preserve backward compatibility");
+  if (headers[0] !== 'Timestamp') throw new Error("First column must be Timestamp");
+  if (headers[10] !== 'Product Category') throw new Error("11th column must be Product Category");
+  if (headers[13] !== 'Location Intent') throw new Error("14th column must be Location Intent");
+}
+
+function testCaptionQualityGates() {
+  const mockConfig = Config.getConfig();
+  mockConfig.testMode = true;
+  mockConfig.geminiApiKey = "test_key";
+  
+  // Create a mock UrlFetchApp for this test scope to test parsing logic
+  const originalFetch = UrlFetchApp.fetch;
+  
+  function validateCaptionPayload(jsonPayload) {
+    UrlFetchApp.fetch = function() {
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify({
+          candidates: [{ content: { parts: [{ text: JSON.stringify(jsonPayload) }] } }]
+        })
+      };
+    };
+    return GeminiService.generateCaption(mockConfig, { mimeType: 'image/jpeg', base64: 'abc' });
+  }
+
+  // 1. Valid caption
+  try {
+    validateCaptionPayload({
+      caption: "Looking for best kids wear? Visit AME Bazaar in Kirari! Whatsapp 9953569533 today. #AMEBazaar #KidsWear #Fashion #KirariDelhi",
+      alt_text: "test", product_category: "test", local_intent: "test"
+    });
+  } catch (e) {
+    throw new Error("Valid caption was incorrectly rejected: " + e.message);
+  }
+
+  // 2. Missing Brand
+  let failed = false;
+  try {
+    validateCaptionPayload({ caption: "Great clothes in Kirari! Visit our store. #Shop #KidsWear #Fashion #KirariDelhi" });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject missing brand");
+
+  // 3. Missing Local Context
+  failed = false;
+  try {
+    validateCaptionPayload({ caption: "Great clothes! Visit AME Bazaar store today. #AMEBazaar #KidsWear #Fashion #Style" });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject missing local context");
+
+  // 4. Missing CTA (Using "store" alone should fail now)
+  failed = false;
+  try {
+    validateCaptionPayload({ caption: "Great clothes at AME Bazaar in Kirari! We have many items in store. #AMEBazaar #KidsWear #Fashion #KirariDelhi" });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject missing/weak CTA");
+
+  // 5. Hashtag Count (<4)
+  failed = false;
+  try {
+    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533. #AMEBazaar #KidsWear #Fashion" });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject <4 hashtags");
+
+  // 6. Hashtag Count (>5)
+  failed = false;
+  try {
+    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533. #AMEBazaar #KidsWear #Fashion #A #B #C" });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject >5 hashtags");
+
+  // 7. Internal Labels
+  failed = false;
+  try {
+    validateCaptionPayload({ caption: "SEO: Visit AME Bazaar in Kirari! Whatsapp 9953569533. #AMEBazaar #KidsWear #Fashion #Delhi" });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject internal labels");
+
+  // 8. Obvious Truncation
+  failed = false;
+  try {
+    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533. #AMEBazaar #KidsWear #Fashion #Delhi and" });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject obvious truncation");
+
+  // Restore mock
+  UrlFetchApp.fetch = originalFetch;
 }
 
 /**
