@@ -882,3 +882,69 @@ function testTriggerSetup() {
   const mockConfig = Config.getConfig();
   if (mockConfig.timeZone !== 'Asia/Kolkata') throw new Error("TimeZone must be Asia/Kolkata");
 }
+
+/**
+ * Validates Meta API connection (Read-Only)
+ */
+function testMetaApiConnection() {
+  Logger.log("=== META API READ-ONLY CONNECTION TEST ===");
+  const config = Config.getConfig();
+  const token = config.metaPageAccessToken;
+  const pageId = config.metaPageId;
+  const igId = config.instagramAccountId;
+  
+  const options = {
+    method: 'get',
+    muteHttpExceptions: true
+  };
+
+  // 1. Check Token Validity
+  Logger.log("1. Checking Token Validity...");
+  try {
+    const meUrl = `https://graph.facebook.com/v19.0/me?access_token=${token}`;
+    const meResponse = UrlFetchApp.fetch(meUrl, options);
+    const meCode = meResponse.getResponseCode();
+    if (meCode === 200) {
+      Logger.log("✓ META token validity: PASS");
+    } else {
+      const err = JSON.parse(meResponse.getContentText());
+      Logger.log("✗ META token validity: FAIL - Status " + meCode + ", Message: " + (err.error && err.error.message ? err.error.message : "Unknown Error"));
+    }
+  } catch(e) {
+    Logger.log("✗ META token validity: FAIL - Exception: " + e.message);
+  }
+
+  // 2. Check Facebook Page Access
+  Logger.log("2. Checking Facebook Page Access...");
+  try {
+    const fbUrl = `https://graph.facebook.com/v19.0/${pageId}?access_token=${token}`;
+    const fbResponse = UrlFetchApp.fetch(fbUrl, options);
+    const fbCode = fbResponse.getResponseCode();
+    if (fbCode === 200) {
+      Logger.log("✓ Facebook Page access: PASS");
+    } else {
+      const err = JSON.parse(fbResponse.getContentText());
+      Logger.log("✗ Facebook Page access: FAIL - Status " + fbCode + ", Message: " + (err.error && err.error.message ? err.error.message : "Unknown Error"));
+    }
+  } catch(e) {
+    Logger.log("✗ Facebook Page access: FAIL - Exception: " + e.message);
+  }
+
+  // 3. Check Instagram Account Access
+  Logger.log("3. Checking Instagram Account Access...");
+  try {
+    const igUrl = `https://graph.facebook.com/v19.0/${igId}?access_token=${token}`;
+    const igResponse = UrlFetchApp.fetch(igUrl, options);
+    const igCode = igResponse.getResponseCode();
+    if (igCode === 200) {
+      Logger.log("✓ Instagram account access: PASS");
+    } else {
+      const err = JSON.parse(igResponse.getContentText());
+      Logger.log("✗ Instagram account access: FAIL - Status " + igCode + ", Message: " + (err.error && err.error.message ? err.error.message : "Unknown Error"));
+    }
+  } catch(e) {
+    Logger.log("✗ Instagram account access: FAIL - Exception: " + e.message);
+  }
+  
+  Logger.log("=== END CONNECTION TEST ===");
+}
