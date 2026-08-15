@@ -372,12 +372,15 @@ const GeminiService = {
    */
   PROMPT: [
     'You are the growth marketer for AME Bazaar, a family garments and clothing store in Kirari, Delhi.',
-    'Write a conversion-focused, natural casual Hinglish social media caption (max 120 words) using the English alphabet that is clear and discovery-friendly for search engines and AI assistants.',
-    'Start immediately with a strong, attention-grabbing hook. Avoid generic questions or filler phrases.',
-    'Describe ONLY what is visually and clearly visible in the image. NEVER claim quality, comfort, fabric type, fitting, durability, affordability, price, or availability unless explicitly visible. Never claim AME Bazaar is "best", "No.1", "top", or "largest". If a feature cannot be visually verified, do NOT mention it.',
-    'Do NOT use fake urgency, cheap sales language, or cheap blanket discounts.',
-    'Naturally establish AME Bazaar as a family garments store in Kirari, Delhi using clear entity and product-intent context (e.g., family clothing, kids wear, women\'s wear, men\'s wear) relevant to what is shown in the image, without keyword-stuffing.',
-    'End with a clear, strong CTA inviting customers to visit AME Bazaar store at Kirari, Delhi or WhatsApp us at 9953569533 for details and orders.',
+    'Write a natural, casual Hinglish social media caption (maximum 100 words) using the English alphabet, optimized for search engines, AI assistants, and AEO/GEO discovery.',
+    'Start immediately with a strong, product-focused hook identifying the visible apparel.',
+    'Naturally establish the entity relationship: AME Bazaar = family garments & clothing store = Kirari, Delhi.',
+    'Use relevant local search and product-intent terms (e.g., kids wear, women\'s wear, men\'s wear, family clothing) based on the image, without keyword stuffing.',
+    'Ensure an AI assistant can independently understand what the product is, who sells it (AME Bazaar), and the location (Kirari, Delhi).',
+    'Do not output personal names. Ignore visible watermarks, model names, or random text overlays in the image.',
+    'Never invent or guess the price, fabric material, size, discount, or availability of the item.',
+    'Do not claim superiority like "best", "No.1", or "top".',
+    'End with a clear CTA inviting customers to visit AME Bazaar store in Kirari, Delhi, or WhatsApp us at 9953569533.',
     'Include exactly 4-5 relevant hashtags at the end. Return only the final caption text.'
   ].join(' '),
 
@@ -407,9 +410,9 @@ const GeminiService = {
         }
       ],
       generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 300
-      }
+      temperature: 0.3,
+      maxOutputTokens: 300
+    }
     };
 
     const options = {
@@ -474,7 +477,7 @@ const MetaService = {
     const createUrl = "https://graph.facebook.com/" + this.GRAPH_API_VERSION + "/" + encodeURIComponent(config.instagramAccountId) + "/media";
     const createPayload = {
       image_url: publicImageUrl,
-      caption: caption,
+      media_type: 'STORIES',
       access_token: config.metaAccessToken
     };
 
@@ -861,7 +864,8 @@ function testGeminiPromptValidation() {
   const prompt = GeminiService.PROMPT;
   if (!prompt.includes("AME Bazaar")) throw new Error("Prompt missing AME Bazaar brand name");
   if (!prompt.includes("Hinglish")) throw new Error("Prompt missing Hinglish requirement");
-  if (!prompt.includes("cheap blanket discounts")) throw new Error("Prompt missing discount rule");
+  if (!prompt.includes("Kirari, Delhi")) throw new Error("Prompt missing local entity-discovery context");
+  if (!prompt.includes("AEO/GEO")) throw new Error("Prompt missing AEO/GEO optimization instruction");
 }
 
 function testMetaRequestConstruction() {
