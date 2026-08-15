@@ -889,7 +889,7 @@ function testTriggerSetup() {
 function testMetaApiConnection() {
   Logger.log("=== META API READ-ONLY CONNECTION TEST ===");
   const config = Config.getConfig();
-  const token = config.metaPageAccessToken;
+  const token = config.metaAccessToken;
   const pageId = config.metaPageId;
   const igId = config.instagramAccountId;
   
