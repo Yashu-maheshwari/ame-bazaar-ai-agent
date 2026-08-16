@@ -449,7 +449,7 @@ const GeminiService = {
       ],
       generationConfig: {
       temperature: 0.3,
-      maxOutputTokens: 500,
+      maxOutputTokens: 1024,
       responseMimeType: "application/json"
     }
     };
