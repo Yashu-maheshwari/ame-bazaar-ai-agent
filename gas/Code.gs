@@ -449,7 +449,7 @@ const GeminiService = {
       ],
       generationConfig: {
       temperature: 0.3,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 4096,
       responseMimeType: "application/json"
     }
     };
@@ -991,6 +991,7 @@ function testGeminiPromptValidation() {
   if (!prompt.includes("Kirari, Delhi")) throw new Error("Prompt missing local entity-discovery context");
   if (!prompt.includes("AEO/GEO")) throw new Error("Prompt missing AEO/GEO optimization instruction");
   if (!prompt.includes("OUTPUT FORMAT: You must return a strict JSON object")) throw new Error("Prompt missing JSON schema instruction");
+  if (!GeminiService.generateCaption.toString().includes("maxOutputTokens: 4096")) throw new Error("Gemini maxOutputTokens must be configured to 4096 to prevent truncation");
 }
 
 function testMetaRequestConstruction() {
