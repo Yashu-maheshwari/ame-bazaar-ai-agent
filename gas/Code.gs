@@ -249,27 +249,39 @@ const SheetService = {
   },
 
   /**
-   * Fetch the last N successful captions to prevent repetition
+   * Fetch recent opening hooks and total success count for anti-repetition and angle rotation
    */
-  getRecentCaptions: function(config, limit = 5) {
+  getRecentHooksAndCount: function(config, limit = 5) {
     const sheet = this.getLogSheet(config);
     const data = sheet.getDataRange().getValues();
-    const recentCaptions = [];
+    const recentHooks = [];
+    let successCount = 0;
     
     // Iterate backwards from the last row
     for (let i = data.length - 1; i > 0; i--) {
       const rowStatus = String(data[i][5]).trim();
       const rowCaption = String(data[i][4]).trim();
       
-      // Look for successful, unique captions (ignore TEST_MODE prefixed or generic errors)
       if (rowStatus === 'SUCCESS' && rowCaption && !rowCaption.startsWith('[TEST_MODE]')) {
-        if (!recentCaptions.includes(rowCaption)) {
-          recentCaptions.push(rowCaption);
+        successCount++;
+        if (recentHooks.length < limit) {
+          const cleanCap = rowCaption.replace(/#[\w]+/g, '').trim();
+          const firstSentence = cleanCap.split(/[.!?\n]/)[0].trim();
+          const hookSnippet = firstSentence.length > 80 ? firstSentence.substring(0, 80) + '...' : firstSentence;
+          if (hookSnippet && !recentHooks.includes(hookSnippet)) {
+            recentHooks.push(hookSnippet);
+          }
         }
       }
-      if (recentCaptions.length >= limit) break;
     }
-    return recentCaptions;
+    return { recentHooks: recentHooks, successCount: successCount };
+  },
+
+  /**
+   * Fetch the last N successful hooks to prevent repetition (backward compatible)
+   */
+  getRecentCaptions: function(config, limit = 5) {
+    return this.getRecentHooksAndCount(config, limit).recentHooks;
   },
 
   /**
@@ -482,19 +494,48 @@ const CloudinaryService = {
 // =========================================================================
 const GeminiService = {
   /**
-   * Optimized Conversion-Focused & SEO/AEO/GEO Friendly Caption Prompt for Kirari, Delhi Store
+   * 4 Lightweight Editorial Angles for balanced syntactic and thematic rotation
+   */
+  ANGLES: [
+    { id: 'STYLING', instruction: 'Highlight outfit styling tips, color coordination, and versatile pairing options for this apparel.' },
+    { id: 'COMFORT_FIT', instruction: 'Emphasize all-day comfort, fit details, fabric feel, and effortless everyday wear.' },
+    { id: 'OCCASION_TREND', instruction: 'Focus on festive/event looks, seasonal trends, and elevating personal style for gatherings.' },
+    { id: 'LOCAL_DISCOVERY', instruction: 'Focus on easy local discovery for Kirari and Delhi shoppers seeking quality clothing nearby.' }
+  ],
+
+  getAngle: function(index) {
+    return this.ANGLES[Math.abs(index) % this.ANGLES.length];
+  },
+
+  /**
+   * Conservative check to detect nearly identical opening hooks
+   */
+  isHookDuplicate: function(newCaption, recentHooks) {
+    if (!recentHooks || recentHooks.length === 0 || !newCaption) return false;
+    const cleanNew = String(newCaption).replace(/#[\w]+/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+    const newWords = cleanNew.split(/\s+/).slice(0, 8).join(' ');
+    
+    for (const hook of recentHooks) {
+      const cleanOld = String(hook).replace(/#[\w]+/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+      const oldWords = cleanOld.split(/\s+/).slice(0, 8).join(' ');
+      if (newWords.length > 15 && oldWords.length > 15 && newWords === oldWords) {
+        return true;
+      }
+    }
+    return false;
+  },
+
+  /**
+   * Optimized Product-First & SEO/AEO/GEO Friendly Caption Prompt for Kirari, Delhi Store
    */
   PROMPT: [
     'You are the growth marketer for AME Bazaar, a family garments and clothing store in Kirari, Delhi.',
-    'Write a natural, casual Hinglish social media caption (approximately 80-130 words) using the English alphabet, optimized for search engines, AI assistants, and AEO/GEO discovery.',
-    'Start immediately with a strong, product-focused hook identifying the visible apparel.',
-    'Naturally establish the entity relationship: AME Bazaar = family garments & clothing store = Kirari, Delhi.',
-    'Use relevant local search and product-intent terms (e.g., kids wear, women\'s wear, men\'s wear, family clothing) based on the image, without keyword stuffing.',
-    'Ensure an AI assistant can independently understand what the product is, who sells it (AME Bazaar), and the location (Kirari, Delhi).',
-    'Do not output personal names. Ignore visible watermarks, model names, or random text overlays in the image.',
-    'Never invent or guess the price, fabric material, size, discount, or availability of the item.',
-    'Do not claim superiority like "best", "No.1", or "top".',
-    'End with a clear CTA inviting customers to visit AME Bazaar store in Kirari, Delhi, or WhatsApp us at 9953569533.',
+    'Write a natural, engaging Hinglish social media caption (approximately 80-130 words) using the English alphabet, optimized for search engines, AI discovery, and local search (AEO/GEO).',
+    'Structure the caption product-first: (1) apparel visual highlight & benefits, (2) styling/use-case context, (3) natural local relevance, (4) varied clear call-to-action.',
+    'Maintain consistent entity signals (AME Bazaar, Kirari, Delhi), but weave them organically into fresh sentence structures. Never use repetitive boilerplate or generic store-introduction paragraphs.',
+    'Product-specific details must occupy the majority of the caption. Do not invent unverified prices, fabric composition, or discounts.',
+    'Do not output personal names or claim superiority like "best", "No.1", or "top".',
+    'End with a natural CTA inviting customers to visit AME Bazaar in Kirari, Delhi, or WhatsApp us at 9953569533 (vary phrasing naturally: e.g. visit store, WhatsApp for details, check availability, explore collection).',
     'Do NOT include hashtags inside the "caption" text.',
     'OUTPUT FORMAT: You must return a strict JSON object with exactly these keys: "caption" (the final text without hashtags), "hashtags" (an array of exactly 4-5 relevant hashtag strings, each starting with #), "alt_text" (concise, descriptive image alt text for accessibility, NOT included in the public caption), "product_category" (short string identifying the visual product category, e.g. "kids wear"), "local_intent" (short string identifying the local phrasing used, e.g. "Kirari"). Do NOT wrap the JSON in Markdown formatting like ```json.'
   ].join(' '),
@@ -502,7 +543,7 @@ const GeminiService = {
   /**
    * Generate Hinglish caption for an image using Gemini API via UrlFetchApp
    */
-  generateCaption: function(config, imageData, recentCaptions = [], category = null) {
+  generateCaption: function(config, imageData, recentHooks = [], category = null, angle = null) {
     if (!config.geminiApiKey) {
       throw new Error("GEMINI_API_KEY is missing in Script Properties.");
     }
@@ -511,10 +552,13 @@ const GeminiService = {
 
     let promptText = this.PROMPT;
     if (category) {
-      promptText += '\n\nIMPORTANT CONTEXT: The product in this image explicitly belongs to the "' + category + '" collection. Use this to accurately frame the apparel type/audience.';
+      promptText += '\n\nPRODUCT COLLECTION: "' + category + '". Frame the apparel audience accordingly.';
     }
-    if (recentCaptions && recentCaptions.length > 0) {
-      promptText += '\n\nIMPORTANT REPETITION CONTROL:\nHere are the last few captions we published. DO NOT use similar opening hooks, identical paragraph structures, or exactly the same hashtag combinations. Provide a fresh angle:\n' + recentCaptions.map((c, i) => `[${i+1}] ${c}`).join('\n');
+    if (angle && angle.instruction) {
+      promptText += '\n\nEDITORIAL ANGLE (' + angle.id + '): ' + angle.instruction;
+    }
+    if (recentHooks && recentHooks.length > 0) {
+      promptText += '\n\nRECENT POST OPENINGS TO AVOID (DO NOT REUSE):\n' + recentHooks.map((h, i) => `[${i+1}] "${h}"`).join('\n');
     }
 
     const payload = {
@@ -843,8 +887,22 @@ function runAgent() {
 
       try {
         const imageData = DriveService.getImageData(item.fileObj);
-        const recentCaptions = SheetService.getRecentCaptions(config, 5);
-        geminiOutput = GeminiService.generateCaption(config, imageData, recentCaptions, item.category);
+        const historyData = SheetService.getRecentHooksAndCount(config, 5);
+        const primaryAngle = GeminiService.getAngle(historyData.successCount);
+        
+        geminiOutput = GeminiService.generateCaption(config, imageData, historyData.recentHooks, item.category, primaryAngle);
+        
+        // Lightweight conservative repetition check with maximum 1 retry
+        if (GeminiService.isHookDuplicate(geminiOutput.caption, historyData.recentHooks)) {
+          Logger.log("⚠ Opening hook repetition detected. Attempting one regeneration with alternate angle...");
+          const retryAngle = GeminiService.getAngle(historyData.successCount + 1);
+          try {
+            const retryOutput = GeminiService.generateCaption(config, imageData, historyData.recentHooks, item.category, retryAngle);
+            geminiOutput = retryOutput;
+          } catch(e) {
+            Logger.log("ℹ Retry generation failed (" + e.message + "). Proceeding with primary output.");
+          }
+        }
         
         caption = geminiOutput.caption;
         if (config.testMode) {
@@ -1062,6 +1120,7 @@ function runAllTests() {
   runTest("Test 7: Backward Compatible Logging Headers", testBackwardCompatibleLogging);
   runTest("Test 8: Strict Caption Quality Gates", testCaptionQualityGates);
   runTest("Test 9: Drive Discovery & Balanced Category Rotation", testDriveDiscoveryAndRotation);
+  runTest("Test 10: Editorial Angle Rotation & Compact History", testAngleRotationAndCompactHistory);
 
   Logger.log("\n==================================================");
   Logger.log("TEST SUMMARY: " + passed + " PASSED, " + failed + " FAILED");
@@ -1279,6 +1338,33 @@ function testDriveDiscoveryAndRotation() {
   // Test 2: TEST_MODE does not permanently block live execution logic is verified by checking the new SheetService.isProcessed check
   if (!SheetService.isProcessed.toString().includes("!rowCaption.startsWith('[TEST_MODE]')")) {
     throw new Error("isProcessed must ignore [TEST_MODE] rows");
+  }
+}
+
+function testAngleRotationAndCompactHistory() {
+  // Test Angle Selection
+  const angle0 = GeminiService.getAngle(0);
+  const angle1 = GeminiService.getAngle(1);
+  const angle2 = GeminiService.getAngle(2);
+  const angle3 = GeminiService.getAngle(3);
+  const angle4 = GeminiService.getAngle(4);
+
+  if (angle0.id !== 'STYLING') throw new Error("Angle 0 must be STYLING");
+  if (angle1.id !== 'COMFORT_FIT') throw new Error("Angle 1 must be COMFORT_FIT");
+  if (angle2.id !== 'OCCASION_TREND') throw new Error("Angle 2 must be OCCASION_TREND");
+  if (angle3.id !== 'LOCAL_DISCOVERY') throw new Error("Angle 3 must be LOCAL_DISCOVERY");
+  if (angle4.id !== 'STYLING') throw new Error("Angle 4 must wrap around to STYLING");
+
+  // Test Hook Duplicate Detection
+  const recentHooks = ["Upgrade your weekend wardrobe with sharp cotton shirts"];
+  const dupCaption = "Upgrade your weekend wardrobe with sharp cotton shirts from our store. Visit AME Bazaar Kirari Delhi. Whatsapp 9953569533 #A #B #C #D";
+  const uniqueCaption = "Step out in comfortable daily wear with breathable fit. Visit AME Bazaar Kirari Delhi. Whatsapp 9953569533 #A #B #C #D";
+
+  if (!GeminiService.isHookDuplicate(dupCaption, recentHooks)) {
+    throw new Error("isHookDuplicate failed to detect duplicate opening hook");
+  }
+  if (GeminiService.isHookDuplicate(uniqueCaption, recentHooks)) {
+    throw new Error("isHookDuplicate falsely flagged a unique opening hook");
   }
 }
 
