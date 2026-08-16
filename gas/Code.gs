@@ -495,8 +495,8 @@ const GeminiService = {
     'Never invent or guess the price, fabric material, size, discount, or availability of the item.',
     'Do not claim superiority like "best", "No.1", or "top".',
     'End with a clear CTA inviting customers to visit AME Bazaar store in Kirari, Delhi, or WhatsApp us at 9953569533.',
-    'Include exactly 4-5 relevant hashtags at the end.',
-    'OUTPUT FORMAT: You must return a strict JSON object with exactly these keys: "caption" (the final text), "alt_text" (concise, descriptive image alt text for accessibility, NOT included in the public caption), "product_category" (short string identifying the visual product category, e.g. "kids wear"), "local_intent" (short string identifying the local phrasing used, e.g. "Kirari"). Do NOT wrap the JSON in Markdown formatting like ```json.'
+    'Do NOT include hashtags inside the "caption" text.',
+    'OUTPUT FORMAT: You must return a strict JSON object with exactly these keys: "caption" (the final text without hashtags), "hashtags" (an array of exactly 4-5 relevant hashtag strings, each starting with #), "alt_text" (concise, descriptive image alt text for accessibility, NOT included in the public caption), "product_category" (short string identifying the visual product category, e.g. "kids wear"), "local_intent" (short string identifying the local phrasing used, e.g. "Kirari"). Do NOT wrap the JSON in Markdown formatting like ```json.'
   ].join(' '),
 
   /**
@@ -580,7 +580,33 @@ const GeminiService = {
       throw new Error("Gemini JSON is missing the 'caption' field.");
     }
 
-    const finalCaption = parsedResult.caption.trim();
+    const rawHashtags = parsedResult.hashtags;
+    if (!Array.isArray(rawHashtags)) {
+      throw new Error("Gemini JSON is missing the 'hashtags' array.");
+    }
+    if (rawHashtags.length < 4 || rawHashtags.length > 5) {
+      throw new Error("Quality Gate Failed: 'hashtags' array must contain exactly 4-5 items. Found: " + rawHashtags.length);
+    }
+    
+    const seenHashtags = new Set();
+    const cleanHashtags = [];
+    for (const ht of rawHashtags) {
+      const cleanHt = String(ht).trim();
+      if (!cleanHt.startsWith('#')) {
+        throw new Error("Quality Gate Failed: Hashtag '" + cleanHt + "' does not start with #.");
+      }
+      if (cleanHt.includes(' ') || cleanHt.length < 2) {
+        throw new Error("Quality Gate Failed: Malformed hashtag '" + cleanHt + "'.");
+      }
+      const lowerHt = cleanHt.toLowerCase();
+      if (seenHashtags.has(lowerHt)) {
+        throw new Error("Quality Gate Failed: Duplicate hashtag found '" + cleanHt + "'.");
+      }
+      seenHashtags.add(lowerHt);
+      cleanHashtags.push(cleanHt);
+    }
+
+    const finalCaption = parsedResult.caption.trim() + "\n\n" + cleanHashtags.join(" ");
     
     // ---------------------------------------------------------
     // HARD QUALITY GATES
@@ -615,7 +641,7 @@ const GeminiService = {
       }
     }
 
-    if (lowerCaption.match(/\b(and|or|the|is|in|on|at|to|with|for|ki|ka|ke|se|mein|aur|par)\s*$/)) {
+    if (parsedResult.caption.trim().toLowerCase().match(/\b(and|or|the|is|in|on|at|to|with|for|ki|ka|ke|se|mein|aur|par)\s*$/)) {
       throw new Error("Quality Gate Failed: Caption appears truncated (ends with dangling word).");
     }
     // ---------------------------------------------------------
@@ -1142,59 +1168,92 @@ function testCaptionQualityGates() {
   // 1. Valid caption
   try {
     validateCaptionPayload({
-      caption: "Looking for best kids wear? Visit AME Bazaar in Kirari! Whatsapp 9953569533 today. #AMEBazaar #KidsWear #Fashion #KirariDelhi",
+      caption: "Looking for best kids wear? Visit AME Bazaar in Kirari! Whatsapp 9953569533 today.",
+      hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"],
       alt_text: "test", product_category: "test", local_intent: "test"
     });
   } catch (e) {
     throw new Error("Valid caption was incorrectly rejected: " + e.message);
   }
 
+  // 1b. Valid caption with 5 hashtags
+  try {
+    validateCaptionPayload({
+      caption: "Looking for best kids wear? Visit AME Bazaar in Kirari! Whatsapp 9953569533 today.",
+      hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi", "#Style"],
+      alt_text: "test", product_category: "test", local_intent: "test"
+    });
+  } catch (e) {
+    throw new Error("Valid caption (5 hashtags) was incorrectly rejected: " + e.message);
+  }
+
   // 2. Missing Brand
   let failed = false;
   try {
-    validateCaptionPayload({ caption: "Great clothes in Kirari! Visit our store. #Shop #KidsWear #Fashion #KirariDelhi" });
+    validateCaptionPayload({ caption: "Great clothes in Kirari! Visit our store.", hashtags: ["#Shop", "#KidsWear", "#Fashion", "#KirariDelhi"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject missing brand");
 
   // 3. Missing Local Context
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Great clothes! Visit AME Bazaar store today. #AMEBazaar #KidsWear #Fashion #Style" });
+    validateCaptionPayload({ caption: "Great clothes! Visit AME Bazaar store today.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#Style"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject missing local context");
 
   // 4. Missing CTA (Using "store" alone should fail now)
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Great clothes at AME Bazaar in Kirari! We have many items in store. #AMEBazaar #KidsWear #Fashion #KirariDelhi" });
+    validateCaptionPayload({ caption: "Great clothes at AME Bazaar in Kirari! We have many items in store.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject missing/weak CTA");
 
-  // 5. Hashtag Count (<4)
+  // 5. Hashtag Count (0 hashtags)
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533. #AMEBazaar #KidsWear #Fashion" });
+    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: [] });
   } catch(e) { failed = true; }
-  if (!failed) throw new Error("Failed to reject <4 hashtags");
+  if (!failed) throw new Error("Failed to reject 0 hashtags");
 
-  // 6. Hashtag Count (>5)
+  // 6. Hashtag Count (3 hashtags)
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533. #AMEBazaar #KidsWear #Fashion #A #B #C" });
+    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion"] });
   } catch(e) { failed = true; }
-  if (!failed) throw new Error("Failed to reject >5 hashtags");
+  if (!failed) throw new Error("Failed to reject 3 hashtags");
 
-  // 7. Internal Labels
+  // 7. Hashtag Count (6 hashtags)
   failed = false;
   try {
-    validateCaptionPayload({ caption: "SEO: Visit AME Bazaar in Kirari! Whatsapp 9953569533. #AMEBazaar #KidsWear #Fashion #Delhi" });
+    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#A", "#B", "#C"] });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject 6 hashtags");
+
+  // 8. Duplicate hashtags
+  failed = false;
+  try {
+    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#amebazaar"] });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject duplicate hashtags");
+
+  // 9. Malformed hashtags
+  failed = false;
+  try {
+    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["AMEBazaar", "#KidsWear", "#Fashion", "#Style"] });
+  } catch(e) { failed = true; }
+  if (!failed) throw new Error("Failed to reject malformed hashtag");
+
+  // 10. Internal Labels
+  failed = false;
+  try {
+    validateCaptionPayload({ caption: "SEO: Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#Delhi"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject internal labels");
 
-  // 8. Obvious Truncation
+  // 11. Obvious Truncation
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533. #AMEBazaar #KidsWear #Fashion #Delhi and" });
+    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533. and", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#Delhi"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject obvious truncation");
 
