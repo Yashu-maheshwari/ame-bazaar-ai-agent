@@ -133,7 +133,8 @@ const SheetService = {
     'Product Category',
     'Alt Text',
     'Content Type',
-    'Location Intent'
+    'Location Intent',
+    'Folder Category'
   ],
 
   /**
@@ -182,9 +183,10 @@ const SheetService = {
     for (let i = 1; i < data.length; i++) {
       const rowFileId = String(data[i][1]).trim();
       const rowPlatform = String(data[i][3]).trim();
+      const rowCaption = String(data[i][4]).trim();
       const rowStatus = String(data[i][5]).trim();
 
-      if (rowFileId === String(fileId).trim() && rowStatus === 'SUCCESS') {
+      if (rowFileId === String(fileId).trim() && rowStatus === 'SUCCESS' && !rowCaption.startsWith('[TEST_MODE]')) {
         if (!platform || rowPlatform === platform || rowPlatform === 'ALL') {
           return true;
         }
@@ -207,9 +209,10 @@ const SheetService = {
     for (let i = 1; i < data.length; i++) {
       const rowFileId = String(data[i][1]).trim();
       const rowPlatform = String(data[i][3]).trim();
+      const rowCaption = String(data[i][4]).trim();
       const rowStatus = String(data[i][5]).trim();
 
-      if (rowFileId === String(fileId).trim() && rowStatus === 'SUCCESS') {
+      if (rowFileId === String(fileId).trim() && rowStatus === 'SUCCESS' && !rowCaption.startsWith('[TEST_MODE]')) {
         if (rowPlatform === 'Facebook' || rowPlatform === 'ALL') history.Facebook = true;
         if (rowPlatform === 'Instagram' || rowPlatform === 'ALL') history.Instagram = true;
       }
@@ -238,7 +241,8 @@ const SheetService = {
       entry.productCategory || '',
       entry.altText || '',
       entry.contentType || 'FEED_POST',
-      entry.localIntent || ''
+      entry.localIntent || '',
+      entry.folderCategory || ''
     ];
 
     sheet.appendRow(row);
@@ -266,6 +270,28 @@ const SheetService = {
       if (recentCaptions.length >= limit) break;
     }
     return recentCaptions;
+  },
+
+  /**
+   * Fetch the last N successfully published folder categories for balanced rotation
+   */
+  getRecentFolderCategories: function(config, limit = 5) {
+    const sheet = this.getLogSheet(config);
+    const data = sheet.getDataRange().getValues();
+    const recentCategories = [];
+    
+    // Iterate backwards
+    for (let i = data.length - 1; i > 0; i--) {
+      const rowCaption = String(data[i][4]).trim();
+      const rowStatus = String(data[i][5]).trim();
+      const rowCategory = String(data[i][14]).trim(); // 15th column is index 14
+      
+      if (rowStatus === 'SUCCESS' && rowCategory && !rowCaption.startsWith('[TEST_MODE]')) {
+        recentCategories.push(rowCategory); // keep duplicates here to trace historical frequency
+      }
+      if (recentCategories.length >= limit) break;
+    }
+    return recentCategories;
   }
 };
 
@@ -275,41 +301,97 @@ const SheetService = {
 // =========================================================================
 const DriveService = {
   /**
-   * List unprocessed image files in the input folder
+   * Recursively scan for unprocessed image media across MEN/WOMEN/BOYS folders
    */
-  getUnprocessedImages: function(config) {
+  getUnprocessedMedia: function(config) {
     if (!config.inputFolderId) {
       throw new Error("INPUT_FOLDER_ID is missing in Script Properties.");
     }
+    const rootFolder = DriveApp.getFolderById(config.inputFolderId);
+    const unprocessedPool = [];
+    
+    // We only care about these specific categories
+    const targetCategories = ['MEN', 'WOMEN', 'BOYS'];
+    
+    this._scanFolder(rootFolder, targetCategories, null, config, unprocessedPool);
 
-    const folder = DriveApp.getFolderById(config.inputFolderId);
-    const files = folder.getFiles();
-    const unprocessed = [];
+    if (unprocessedPool.length === 0) return [];
 
-    while (files.hasNext()) {
-      const file = files.next();
-      const mimeType = file.getMimeType();
+    const recentCategories = SheetService.getRecentFolderCategories(config, 10);
+    return this._balancedCategoryRotation(unprocessedPool, recentCategories, config.maxFilesPerRun || 1);
+  },
 
-      if (mimeType.indexOf('image/') !== -1 || mimeType === 'application/octet-stream') {
-        const fileId = file.getId();
+  _scanFolder: function(folder, targetCategories, currentCategory, config, pool) {
+    const folderName = folder.getName();
+    let newCategory = currentCategory;
+    
+    // Set category if it matches
+    if (!currentCategory && targetCategories.includes(folderName)) {
+      newCategory = folderName;
+    }
+
+    // Explicitly exclude REELS
+    if (folderName === 'REELS') return;
+
+    // Scan files (only if we are inside a supported category)
+    if (newCategory) {
+      const files = folder.getFiles();
+      while (files.hasNext()) {
+        const file = files.next();
+        const mimeType = file.getMimeType();
         
-        const alreadyProcessed = SheetService.isProcessed(config, fileId);
-        if (!alreadyProcessed) {
-          unprocessed.push({
-            id: fileId,
-            name: file.getName(),
-            mimeType: mimeType === 'application/octet-stream' ? 'image/jpeg' : mimeType,
-            fileObj: file
-          });
+        // Accept images only for this queue
+        if (mimeType.indexOf('image/') !== -1 || mimeType === 'application/octet-stream') {
+          const fileId = file.getId();
+          if (!SheetService.isProcessed(config, fileId)) {
+            pool.push({
+              id: fileId,
+              name: file.getName(),
+              mimeType: mimeType === 'application/octet-stream' ? 'image/jpeg' : mimeType,
+              category: newCategory,
+              fileObj: file
+            });
+          }
         }
-      }
-
-      if (unprocessed.length >= config.maxFilesPerRun) {
-        break;
       }
     }
 
-    return unprocessed;
+    // Recursively scan subfolders
+    const subfolders = folder.getFolders();
+    while (subfolders.hasNext()) {
+      this._scanFolder(subfolders.next(), targetCategories, newCategory, config, pool);
+    }
+  },
+
+  _balancedCategoryRotation: function(pool, recentCategories, maxFiles) {
+    const byCategory = {};
+    pool.forEach(item => {
+      if (!byCategory[item.category]) byCategory[item.category] = [];
+      byCategory[item.category].push(item);
+    });
+
+    const availableCategories = Object.keys(byCategory);
+    
+    availableCategories.sort((a, b) => {
+      const idxA = recentCategories.indexOf(a);
+      const idxB = recentCategories.indexOf(b);
+      const scoreA = idxA === -1 ? 999 : idxA;
+      const scoreB = idxB === -1 ? 999 : idxB;
+      return scoreB - scoreA; // descending
+    });
+
+    const results = [];
+    let cycleLimit = maxFiles * 3;
+    while (results.length < maxFiles && cycleLimit > 0) {
+      for (const cat of availableCategories) {
+        if (results.length >= maxFiles) break;
+        if (byCategory[cat].length > 0) {
+          results.push(byCategory[cat].shift());
+        }
+      }
+      cycleLimit--;
+    }
+    return results;
   },
 
   /**
@@ -420,7 +502,7 @@ const GeminiService = {
   /**
    * Generate Hinglish caption for an image using Gemini API via UrlFetchApp
    */
-  generateCaption: function(config, imageData, recentCaptions = []) {
+  generateCaption: function(config, imageData, recentCaptions = [], category = null) {
     if (!config.geminiApiKey) {
       throw new Error("GEMINI_API_KEY is missing in Script Properties.");
     }
@@ -428,6 +510,9 @@ const GeminiService = {
     const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(config.geminiApiKey);
 
     let promptText = this.PROMPT;
+    if (category) {
+      promptText += '\n\nIMPORTANT CONTEXT: The product in this image explicitly belongs to the "' + category + '" collection. Use this to accurately frame the apparel type/audience.';
+    }
     if (recentCaptions && recentCaptions.length > 0) {
       promptText += '\n\nIMPORTANT REPETITION CONTROL:\nHere are the last few captions we published. DO NOT use similar opening hooks, identical paragraph structures, or exactly the same hashtag combinations. Provide a fresh angle:\n' + recentCaptions.map((c, i) => `[${i+1}] ${c}`).join('\n');
     }
@@ -710,9 +795,9 @@ function runAgent() {
     Logger.log("Time: " + new Date().toISOString() + " | Mode: " + (config.testMode ? "TEST_MODE (NO REAL POSTS)" : "LIVE PUBLISHING"));
     Logger.log("==================================================");
 
-    const unprocessedFiles = DriveService.getUnprocessedImages(config);
+    const unprocessedFiles = DriveService.getUnprocessedMedia(config);
     if (unprocessedFiles.length === 0) {
-      Logger.log("ℹ No new unprocessed images found in INPUT_FOLDER_ID.");
+      Logger.log("ℹ No new unprocessed media found in supported folders inside INPUT_FOLDER_ID.");
       return;
     }
 
@@ -720,7 +805,7 @@ function runAgent() {
 
     for (const item of unprocessedFiles) {
       Logger.log("\n--------------------------------------------------");
-      Logger.log("Processing File: " + item.name + " (ID: " + item.id + ")");
+      Logger.log("Processing File: " + item.name + " (ID: " + item.id + " | Category: " + (item.category || 'None') + ")");
       
       const fileHistory = SheetService.getFilePlatformHistory(config, item.id);
       let fbSuccess = fileHistory.Facebook;
@@ -733,7 +818,7 @@ function runAgent() {
       try {
         const imageData = DriveService.getImageData(item.fileObj);
         const recentCaptions = SheetService.getRecentCaptions(config, 5);
-        geminiOutput = GeminiService.generateCaption(config, imageData, recentCaptions);
+        geminiOutput = GeminiService.generateCaption(config, imageData, recentCaptions, item.category);
         
         caption = geminiOutput.caption;
         if (config.testMode) {
@@ -759,7 +844,8 @@ function runAgent() {
               productCategory: geminiOutput.productCategory,
               altText: geminiOutput.altText,
               contentType: 'FEED_POST',
-              localIntent: geminiOutput.localIntent
+              localIntent: geminiOutput.localIntent,
+              folderCategory: item.category || ''
             });
             fbSuccess = true;
           } catch (err) {
@@ -777,7 +863,8 @@ function runAgent() {
               productCategory: geminiOutput.productCategory,
               altText: geminiOutput.altText,
               contentType: 'FEED_POST',
-              localIntent: geminiOutput.localIntent
+              localIntent: geminiOutput.localIntent,
+              folderCategory: item.category || ''
             });
           }
         } else {
@@ -801,7 +888,8 @@ function runAgent() {
               productCategory: geminiOutput.productCategory,
               altText: geminiOutput.altText,
               contentType: 'FEED_POST',
-              localIntent: geminiOutput.localIntent
+              localIntent: geminiOutput.localIntent,
+              folderCategory: item.category || ''
             });
             igSuccess = true;
           } catch (err) {
@@ -819,7 +907,8 @@ function runAgent() {
               productCategory: geminiOutput.productCategory,
               altText: geminiOutput.altText,
               contentType: 'FEED_POST',
-              localIntent: geminiOutput.localIntent
+              localIntent: geminiOutput.localIntent,
+              folderCategory: item.category || ''
             });
           }
         } else {
@@ -852,7 +941,8 @@ function runAgent() {
           productCategory: geminiOutput.productCategory || '',
           altText: geminiOutput.altText || '',
           contentType: 'FEED_POST',
-          localIntent: geminiOutput.localIntent || ''
+          localIntent: geminiOutput.localIntent || '',
+          folderCategory: item.category || ''
         });
       }
     }
@@ -945,6 +1035,7 @@ function runAllTests() {
   runTest("Test 6: Duplicate Caption Prevention Retrieval", testDuplicateCaptionPrevention);
   runTest("Test 7: Backward Compatible Logging Headers", testBackwardCompatibleLogging);
   runTest("Test 8: Strict Caption Quality Gates", testCaptionQualityGates);
+  runTest("Test 9: Drive Discovery & Balanced Category Rotation", testDriveDiscoveryAndRotation);
 
   Logger.log("\n==================================================");
   Logger.log("TEST SUMMARY: " + passed + " PASSED, " + failed + " FAILED");
@@ -971,7 +1062,7 @@ function testSheetLoggingAndDuplicateCheck() {
     fileId: testFileId,
     fileName: "test_image.jpg",
     platform: "Facebook",
-    caption: "[TEST_MODE] High quality garment caption",
+    caption: "High quality garment caption",
     status: "SUCCESS",
     postId: "test_post_123",
     postUrl: "https://facebook.com/test",
@@ -1021,10 +1112,11 @@ function testDuplicateCaptionPrevention() {
 
 function testBackwardCompatibleLogging() {
   const headers = SheetService.HEADERS;
-  if (headers.length !== 14) throw new Error("Sheet headers should be exactly 14 to preserve backward compatibility");
+  if (headers.length !== 15) throw new Error("Sheet headers should be exactly 15 to include Folder Category while preserving backward compatibility");
   if (headers[0] !== 'Timestamp') throw new Error("First column must be Timestamp");
   if (headers[10] !== 'Product Category') throw new Error("11th column must be Product Category");
   if (headers[13] !== 'Location Intent') throw new Error("14th column must be Location Intent");
+  if (headers[14] !== 'Folder Category') throw new Error("15th column must be Folder Category");
 }
 
 function testCaptionQualityGates() {
@@ -1109,6 +1201,28 @@ function testCaptionQualityGates() {
   // Restore mock
   UrlFetchApp.fetch = originalFetch;
 }
+
+function testDriveDiscoveryAndRotation() {
+  // Test 1: Category rotation logic
+  const mockUnprocessed = [
+    { id: '1', name: 'm1.jpg', category: 'MEN' },
+    { id: '2', name: 'm2.jpg', category: 'MEN' },
+    { id: '3', name: 'w1.jpg', category: 'WOMEN' },
+    { id: '4', name: 'b1.jpg', category: 'BOYS' }
+  ];
+  const recentCategories = ['MEN', 'WOMEN']; // BOYS is most starved
+  const results = DriveService._balancedCategoryRotation(mockUnprocessed, recentCategories, 2);
+  
+  if (results.length !== 2) throw new Error("Rotation should return maxFiles (2)");
+  if (results[0].category !== 'BOYS') throw new Error("Rotation failed to prefer starved category BOYS");
+  if (results[1].category !== 'WOMEN') throw new Error("Rotation failed to pick next least-recently-used WOMEN");
+
+  // Test 2: TEST_MODE does not permanently block live execution logic is verified by checking the new SheetService.isProcessed check
+  if (!SheetService.isProcessed.toString().includes("!rowCaption.startsWith('[TEST_MODE]')")) {
+    throw new Error("isProcessed must ignore [TEST_MODE] rows");
+  }
+}
+
 
 /**
  * Validates Meta API connection (Read-Only)
