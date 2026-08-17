@@ -507,9 +507,6 @@ const GeminiService = {
     return this.ANGLES[Math.abs(index) % this.ANGLES.length];
   },
 
-  /**
-   * Conservative check to detect nearly identical opening hooks
-   */
   isHookDuplicate: function(newCaption, recentHooks) {
     if (!recentHooks || recentHooks.length === 0 || !newCaption) return false;
     const cleanNew = String(newCaption).replace(/#[\w]+/g, '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
@@ -526,18 +523,41 @@ const GeminiService = {
   },
 
   /**
+   * Validate if the detected visual category matches the Drive folder category
+   */
+  validateCategoryMatch: function(detectedCategory, folderCategory) {
+    const detected = String(detectedCategory || '').toUpperCase().trim();
+    const folderCat = String(folderCategory || '').toUpperCase().trim();
+    if (detected === 'UNKNOWN') return 'REVIEW_REQUIRED';
+    if (detected !== folderCat) return 'CATEGORY_MISMATCH';
+    return 'MATCH';
+  },
+
+  /**
    * Optimized Product-First & SEO/AEO/GEO Friendly Caption Prompt for Kirari, Delhi Store
    */
   PROMPT: [
-    'You are the growth marketer for AME Bazaar, a family garments and clothing store in Kirari, Delhi.',
-    'Write a natural, engaging Hinglish social media caption (approximately 80-130 words) using the English alphabet, optimized for search engines, AI discovery, and local search (AEO/GEO).',
-    'Structure the caption product-first: (1) apparel visual highlight & benefits, (2) styling/use-case context, (3) natural local relevance, (4) varied clear call-to-action.',
-    'Maintain consistent entity signals (AME Bazaar, Kirari, Delhi), but weave them organically into fresh sentence structures. Never use repetitive boilerplate or generic store-introduction paragraphs.',
-    'Product-specific details must occupy the majority of the caption. Do not invent unverified prices, fabric composition, or discounts.',
+    'You are the growth marketer for AME Bazaar in Kirari, Delhi.',
+    'Write an engaging Hinglish social media caption (80-130 words) using the English alphabet.',
+    'VISUAL TRUTH MANDATE: The image itself is the primary truth. Independently inspect the image and determine the visually supported category, garment type, color, pattern, and styling.',
+    'Never invent category, age, gender, garment type, fabric, design or product attributes that are not reasonably supported by the image.',
+    'Folder category is supporting metadata only.',
+    'CAPTION STRUCTURE: (1) Visual Hook → (2) Specific visual product description → (3) Use/Styling value → (4) Natural Kirari/Delhi entity signal → (5) Engagement CTA (rotate: comment/question/choice/save/local) → (6) Optional soft store/WhatsApp CTA.',
+    'The product must dominate the caption. Do not repeatedly introduce "AME Bazaar is a family clothing store in Kirari, Delhi" as boilerplate; naturally weave the entity into the caption.',
+    'Do not use generic AI filler like "carefully curated", "unique styles", "personality ko complement", "one-stop destination", or "latest collection" unless genuinely relevant.',
     'Do not output personal names or claim superiority like "best", "No.1", or "top".',
-    'End with a natural CTA inviting customers to visit AME Bazaar in Kirari, Delhi, or WhatsApp us at 9953569533 (vary phrasing naturally: e.g. visit store, WhatsApp for details, check availability, explore collection).',
     'Do NOT include hashtags inside the "caption" text.',
-    'OUTPUT FORMAT: You must return a strict JSON object with exactly these keys: "caption" (the final text without hashtags), "hashtags" (an array of exactly 4-5 relevant hashtag strings, each starting with #), "alt_text" (concise, descriptive image alt text for accessibility, NOT included in the public caption), "product_category" (short string identifying the visual product category, e.g. "kids wear"), "local_intent" (short string identifying the local phrasing used, e.g. "Kirari"). Do NOT wrap the JSON in Markdown formatting like ```json.'
+    'OUTPUT FORMAT: You must return a strict JSON object with exactly these keys:',
+    '"detected_category" (must be exact string: "MEN", "WOMEN", "BOYS", or "UNKNOWN"),',
+    '"product_type" (short string),',
+    '"visible_garment_details" (short string),',
+    '"color_pattern" (short string),',
+    '"occasion_use_case" (short string),',
+    '"caption" (the final text without hashtags),',
+    '"hashtags" (array of exactly 4-5 relevant hashtag strings, matching detected visual category/product, each starting with #),',
+    '"alt_text" (concise descriptive image alt text),',
+    '"local_intent" (short string).',
+    'Do NOT wrap the JSON in Markdown formatting like ```json.'
   ].join(' '),
 
   /**
@@ -552,7 +572,7 @@ const GeminiService = {
 
     let promptText = this.PROMPT;
     if (category) {
-      promptText += '\n\nPRODUCT COLLECTION: "' + category + '". Frame the apparel audience accordingly.';
+      promptText += '\n\nFOLDER METADATA: "' + category + '". This is supporting metadata only. Independently inspect the image and determine the visually supported category.';
     }
     if (angle && angle.instruction) {
       promptText += '\n\nEDITORIAL ANGLE (' + angle.id + '): ' + angle.instruction;
@@ -692,9 +712,13 @@ const GeminiService = {
 
     Logger.log("✓ Gemini JSON metadata generated successfully.");
     return {
+      detectedCategory: parsedResult.detected_category || 'UNKNOWN',
+      productType: parsedResult.product_type || '',
+      visibleGarmentDetails: parsedResult.visible_garment_details || '',
+      colorPattern: parsedResult.color_pattern || '',
+      occasionUseCase: parsedResult.occasion_use_case || '',
       caption: finalCaption,
       altText: parsedResult.alt_text || '',
-      productCategory: parsedResult.product_category || '',
       localIntent: parsedResult.local_intent || ''
     };
   }
@@ -904,6 +928,32 @@ function runAgent() {
           }
         }
         
+        // CATEGORY SAFETY GATE
+        const matchResult = GeminiService.validateCategoryMatch(geminiOutput.detectedCategory, item.category);
+        const folderCat = String(item.category || '').toUpperCase().trim();
+        
+        if (matchResult === 'REVIEW_REQUIRED') {
+          Logger.log("⚠ REVIEW_REQUIRED: AI could not confidently determine category from image.");
+          SheetService.logExecution(config, {
+            fileId: item.id, fileName: item.name, platform: 'General', caption: geminiOutput.caption,
+            status: 'REVIEW_REQUIRED', error: 'AI could not confidently determine category.',
+            executionId: executionId, productCategory: geminiOutput.productType, altText: geminiOutput.altText,
+            contentType: 'FEED_POST', localIntent: geminiOutput.localIntent, folderCategory: folderCat
+          });
+          continue;
+        }
+        
+        if (matchResult === 'CATEGORY_MISMATCH') {
+          Logger.log(`⚠ CATEGORY_MISMATCH: Image visually detected as [${geminiOutput.detectedCategory}] but folder is [${folderCat}]. Publishing aborted.`);
+          SheetService.logExecution(config, {
+            fileId: item.id, fileName: item.name, platform: 'General', caption: geminiOutput.caption,
+            status: 'CATEGORY_MISMATCH', error: `Image detected as ${geminiOutput.detectedCategory} != folder ${folderCat}`,
+            executionId: executionId, productCategory: geminiOutput.productType, altText: geminiOutput.altText,
+            contentType: 'FEED_POST', localIntent: geminiOutput.localIntent, folderCategory: folderCat
+          });
+          continue;
+        }
+        
         caption = geminiOutput.caption;
         if (config.testMode) {
           caption = "[TEST_MODE] " + caption;
@@ -925,11 +975,11 @@ function runAgent() {
               postUrl: fbResult.postUrl,
               error: '',
               executionId: executionId,
-              productCategory: geminiOutput.productCategory,
+              productCategory: geminiOutput.productType,
               altText: geminiOutput.altText,
               contentType: 'FEED_POST',
               localIntent: geminiOutput.localIntent,
-              folderCategory: item.category || ''
+              folderCategory: folderCat
             });
             fbSuccess = true;
           } catch (err) {
@@ -944,11 +994,11 @@ function runAgent() {
               postUrl: '',
               error: err.message,
               executionId: executionId,
-              productCategory: geminiOutput.productCategory,
+              productCategory: geminiOutput.productType,
               altText: geminiOutput.altText,
               contentType: 'FEED_POST',
               localIntent: geminiOutput.localIntent,
-              folderCategory: item.category || ''
+              folderCategory: folderCat
             });
           }
         } else {
@@ -969,11 +1019,11 @@ function runAgent() {
               postUrl: igResult.postUrl,
               error: '',
               executionId: executionId,
-              productCategory: geminiOutput.productCategory,
+              productCategory: geminiOutput.productType,
               altText: geminiOutput.altText,
               contentType: 'FEED_POST',
               localIntent: geminiOutput.localIntent,
-              folderCategory: item.category || ''
+              folderCategory: folderCat
             });
             igSuccess = true;
           } catch (err) {
@@ -988,11 +1038,11 @@ function runAgent() {
               postUrl: '',
               error: err.message,
               executionId: executionId,
-              productCategory: geminiOutput.productCategory,
+              productCategory: geminiOutput.productType,
               altText: geminiOutput.altText,
               contentType: 'FEED_POST',
               localIntent: geminiOutput.localIntent,
-              folderCategory: item.category || ''
+              folderCategory: folderCat
             });
           }
         } else {
@@ -1227,9 +1277,11 @@ function testCaptionQualityGates() {
   // 1. Valid caption
   try {
     validateCaptionPayload({
-      caption: "Looking for best kids wear? Visit AME Bazaar in Kirari! Whatsapp 9953569533 today.",
-      hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"],
-      alt_text: "test", product_category: "test", local_intent: "test"
+      detected_category: "WOMEN", product_type: "Kurti", visible_garment_details: "Red printed",
+      color_pattern: "Red floral", occasion_use_case: "Casual",
+      caption: "Looking for best womens wear? Visit AME Bazaar in Kirari! Whatsapp 9953569533 today.",
+      hashtags: ["#AMEBazaar", "#WomensWear", "#Fashion", "#KirariDelhi"],
+      alt_text: "test", local_intent: "test"
     });
   } catch (e) {
     throw new Error("Valid caption was incorrectly rejected: " + e.message);
@@ -1238,9 +1290,11 @@ function testCaptionQualityGates() {
   // 1b. Valid caption with 5 hashtags
   try {
     validateCaptionPayload({
-      caption: "Looking for best kids wear? Visit AME Bazaar in Kirari! Whatsapp 9953569533 today.",
-      hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi", "#Style"],
-      alt_text: "test", product_category: "test", local_intent: "test"
+      detected_category: "BOYS", product_type: "Shirt", visible_garment_details: "Blue solid",
+      color_pattern: "Blue", occasion_use_case: "Party",
+      caption: "Looking for best boys wear? Visit AME Bazaar in Kirari! Whatsapp 9953569533 today.",
+      hashtags: ["#AMEBazaar", "#BoysWear", "#Fashion", "#KirariDelhi", "#Style"],
+      alt_text: "test", local_intent: "test"
     });
   } catch (e) {
     throw new Error("Valid caption (5 hashtags) was incorrectly rejected: " + e.message);
@@ -1249,75 +1303,90 @@ function testCaptionQualityGates() {
   // 2. Missing Brand
   let failed = false;
   try {
-    validateCaptionPayload({ caption: "Great clothes in Kirari! Visit our store.", hashtags: ["#Shop", "#KidsWear", "#Fashion", "#KirariDelhi"] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "Great clothes in Kirari! Visit our store.", hashtags: ["#Shop", "#KidsWear", "#Fashion", "#KirariDelhi"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject missing brand");
 
   // 3. Missing Local Context
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Great clothes! Visit AME Bazaar store today.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#Style"] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "Great clothes! Visit AME Bazaar store today.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#Style"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject missing local context");
 
   // 4. Missing CTA (Using "store" alone should fail now)
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Great clothes at AME Bazaar in Kirari! We have many items in store.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "Great clothes at AME Bazaar in Kirari! We have many items in store.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject missing/weak CTA");
 
   // 5. Hashtag Count (0 hashtags)
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: [] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: [] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject 0 hashtags");
 
   // 6. Hashtag Count (3 hashtags)
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion"] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject 3 hashtags");
 
   // 7. Hashtag Count (6 hashtags)
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#A", "#B", "#C"] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#A", "#B", "#C"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject 6 hashtags");
 
   // 8. Duplicate hashtags
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#amebazaar"] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#amebazaar"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject duplicate hashtags");
 
   // 9. Malformed hashtags
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["AMEBazaar", "#KidsWear", "#Fashion", "#Style"] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["AMEBazaar", "#KidsWear", "#Fashion", "#Style"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject malformed hashtag");
 
   // 10. Internal Labels
   failed = false;
   try {
-    validateCaptionPayload({ caption: "SEO: Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#Delhi"] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "SEO: Visit AME Bazaar in Kirari! Whatsapp 9953569533.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#Delhi"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject internal labels");
 
   // 11. Obvious Truncation
   failed = false;
   try {
-    validateCaptionPayload({ caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533. and", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#Delhi"] });
+    validateCaptionPayload({ detected_category: "MEN", caption: "Visit AME Bazaar in Kirari! Whatsapp 9953569533. and", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#Delhi"] });
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject obvious truncation");
 
   // Restore mock
   UrlFetchApp.fetch = originalFetch;
+}
+
+function testCategoryMismatchSafetyGate() {
+  // A. WOMEN image + WOMEN folder
+  if (GeminiService.validateCategoryMatch("WOMEN", "WOMEN") !== "MATCH") throw new Error("WOMEN + WOMEN should MATCH");
+  
+  // B. WOMEN image + BOYS folder
+  if (GeminiService.validateCategoryMatch("WOMEN", "BOYS") !== "CATEGORY_MISMATCH") throw new Error("WOMEN + BOYS should be CATEGORY_MISMATCH");
+  
+  // C. UNKNOWN category
+  if (GeminiService.validateCategoryMatch("UNKNOWN", "MEN") !== "REVIEW_REQUIRED") throw new Error("UNKNOWN should be REVIEW_REQUIRED");
+  if (GeminiService.validateCategoryMatch("", "MEN") !== "REVIEW_REQUIRED") throw new Error("Empty detected should map to UNKNOWN/REVIEW_REQUIRED");
+  
+  // D. BOYS image + BOYS folder
+  if (GeminiService.validateCategoryMatch("BOYS", "BOYS") !== "MATCH") throw new Error("BOYS + BOYS should MATCH");
 }
 
 function testDriveDiscoveryAndRotation() {
