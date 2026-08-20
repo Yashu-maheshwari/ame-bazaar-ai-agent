@@ -689,7 +689,7 @@ const GeminiService = {
       throw new Error("Quality Gate Failed: Caption missing local entity context (Kirari/Delhi).");
     }
     
-    if (!lowerCaption.match(/(visit ame bazaar|visit us|visit our store|store par|store visit|whatsapp|9953569533|contact)/)) {
+    if (!lowerCaption.match(/\b(visit ame bazaar|visit us|visit our store|store par|store visit|whatsapp|9953569533|contact us|call us|comment|tell us|let us know|save this|tag a friend|tag someone|share this|share with|which one|what do you think|your favorite|drop a comment)\b/)) {
       throw new Error("Quality Gate Failed: Caption missing a clear CTA.");
     }
 
@@ -1314,7 +1314,27 @@ function testCaptionQualityGates() {
   } catch(e) { failed = true; }
   if (!failed) throw new Error("Failed to reject missing local context");
 
-  // 4. Missing CTA (Using "store" alone should fail now)
+  // 4a. CTA Test: "Comment your favorite color"
+  try {
+    validateCaptionPayload({ detected_category: "MEN", caption: "Great clothes at AME Bazaar in Kirari! Comment your favorite color.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"] });
+  } catch(e) { throw new Error("Failed to accept 'Comment' CTA: " + e.message); }
+
+  // 4b. CTA Test: "Save this look for your next event"
+  try {
+    validateCaptionPayload({ detected_category: "MEN", caption: "Great clothes at AME Bazaar in Kirari! Save this look for your next event.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"] });
+  } catch(e) { throw new Error("Failed to accept 'Save this look' CTA: " + e.message); }
+
+  // 4c. CTA Test: "Tag a friend"
+  try {
+    validateCaptionPayload({ detected_category: "MEN", caption: "Great clothes at AME Bazaar in Kirari! Tag a friend.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"] });
+  } catch(e) { throw new Error("Failed to accept 'Tag a friend' CTA: " + e.message); }
+
+  // 4d. CTA Test: "Visit AME Bazaar"
+  try {
+    validateCaptionPayload({ detected_category: "MEN", caption: "Great clothes in Kirari! Visit AME Bazaar today.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"] });
+  } catch(e) { throw new Error("Failed to accept 'Visit AME Bazaar' CTA: " + e.message); }
+
+  // 4e. CTA Test: NO genuine CTA
   failed = false;
   try {
     validateCaptionPayload({ detected_category: "MEN", caption: "Great clothes at AME Bazaar in Kirari! We have many items in store.", hashtags: ["#AMEBazaar", "#KidsWear", "#Fashion", "#KirariDelhi"] });
