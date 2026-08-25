@@ -1,0 +1,55 @@
+{
+  "name": "AME - Daily File-ID Resolver Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 30 5 * * *"
+            }
+          ]
+        }
+      },
+      "id": "h6f7a08b-621f-490b-93f5-bfcae1823ab9",
+      "name": "Schedule Trigger - 1x Daily (05:30 UTC)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { Client } = require('pg');\nconst https = require('https');\n\nconst connectionString = process.env.DATABASE_URL;\nconst clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;\nconst clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;\nconst refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;\n\nfunction postForm(url, params) {\n  return new Promise((resolve, reject) => {\n    const urlObj = new URL(url);\n    const body = Object.keys(params)\n      .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))\n      .join('&');\n    const options = {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/x-www-form-urlencoded',\n        'Content-Length': Buffer.byteLength(body)\n      }\n    };\n    const req = https.request(urlObj, options, (res) => {\n      let responseBody = '';\n      res.on('data', chunk => responseBody += chunk);\n      res.on('end', () => {\n        try { resolve(JSON.parse(responseBody)); } catch (e) { reject(e); }\n      });\n    });\n    req.on('error', reject);\n    req.write(body);\n    req.end();\n  });\n}\n\nfunction getJson(url, headers = {}) {\n  return new Promise((resolve, reject) => {\n    const options = { method: 'GET', headers };\n    const req = https.request(url, options, (res) => {\n      let responseBody = '';\n      res.on('data', chunk => responseBody += chunk);\n      res.on('end', () => {\n        try { resolve(JSON.parse(responseBody)); } catch (e) { reject(e); }\n      });\n    });\n    req.on('error', reject);\n    req.end();\n  });\n}\n\nasync function main() {\n  if (!connectionString) throw new Error('Missing DATABASE_URL env variable');\n  if (!clientId || !clientSecret || !refreshToken) throw new Error('Missing Google Drive OAuth credentials');\n\n  const tokenRes = await postForm('https://oauth2.googleapis.com/token', {\n    client_id: clientId,\n    client_secret: clientSecret,\n    refresh_token: refreshToken,\n    grant_type: 'refresh_token'\n  });\n  const accessToken = tokenRes.access_token;\n  if (!accessToken) throw new Error('Failed to obtain Google access token');\n\n  const pgClient = new Client({\n    connectionString,\n    ssl: { rejectUnauthorized: false }\n  });\n  await pgClient.connect();\n\n  try {\n    const todayDate = new Date().toISOString().split('T')[0];\n    const plansRes = await pgClient.query('SELECT * FROM daily_content_plans WHERE plan_date = $1', [todayDate]);\n    const plans = plansRes.rows;\n    const upserted = [];\n\n    for (const plan of plans) {\n      let fileId = null;\n      let status = 'NO_ASSET_REQUESTED';\n      let reason = 'No asset requested for this slot.';\n      const assetRef = plan.content_asset_ref;\n\n      if (assetRef) {\n        try {\n          const q = 'name=\\'' + assetRef.replace(/'/g, '\\\\\\'') + '\\' and trashed=false';\n          const url = 'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) + '&fields=files(id,name)';\n          const driveRes = await getJson(url, { 'Authorization': 'Bearer ' + accessToken });\n          const files = driveRes.files || [];\n          \n          if (files.length === 0) {\n            status = 'MISSING_ASSET';\n            reason = 'File was not found in Google Drive.';\n          } else if (files.length === 1) {\n            fileId = files[0].id;\n            status = 'RESOLVED';\n            reason = 'Found exactly one matching file.';\n          } else {\n            status = 'AMBIGUOUS_ASSET';\n            reason = 'Found ' + files.length + ' duplicate files with name \"' + assetRef + '\" on Google Drive.';\n          }\n        } catch (err) {\n          status = 'ERROR';\n          reason = 'Google API Error: ' + err.message;\n        }\n      }\n\n      const upsertSql = 'INSERT INTO file_id_resolutions (plan_id, content_plan_id, content_asset_ref, google_drive_file_id, resolution_status, resolution_reason, resolved_at) VALUES ($1, $2, $3, $4, $5, $6, now()) ON CONFLICT (plan_id, content_plan_id) DO UPDATE SET content_asset_ref = EXCLUDED.content_asset_ref, google_drive_file_id = EXCLUDED.google_drive_file_id, resolution_status = EXCLUDED.resolution_status, resolution_reason = EXCLUDED.resolution_reason, resolved_at = now() RETURNING id;';\n      \n      const dbRes = await pgClient.query(upsertSql, [\n        plan.id,\n        plan.content_plan_id,\n        assetRef,\n        fileId,\n        status,\n        reason\n      ]);\n      \n      upserted.push({ slotId: plan.content_plan_id, status, fileId });\n    }\n\n    await pgClient.end();\n    return [{ json: { success: true, count: upserted.length, resolutions: upserted } }];\n  } catch (err) {\n    await pgClient.end();\n    throw err;\n  }\n}"
+      },
+      "id": "e2f7c03c-b2ef-4c12-9213-90ac3f4b23ef",
+      "name": "Code - Daily File-ID Resolver Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        250
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger - 1x Daily (05:30 UTC)": {
+      "main": [
+        [
+          {
+            "node": "Code - Daily File-ID Resolver Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "Asia/Kolkata"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "name": "AME - Daily Category Performance Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "e6f7a08b-621f-490b-93f5-bfcae1823ab9",
+      "name": "Schedule Trigger - 1x Daily (03:00 UTC)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { Client } = require('pg');\n\nconst connectionString = process.env.DATABASE_URL;\nconst MIN_CATEGORY_POSTS = 3;\n\nfunction median(values) {\n  if (values.length === 0) return null;\n  const sorted = [...values].sort((a, b) => a - b);\n  const half = Math.floor(sorted.length / 2);\n  if (sorted.length % 2 !== 0) {\n    return sorted[half];\n  }\n  return (sorted[half - 1] + sorted[half]) / 2.0;\n}\n\nasync function main() {\n  if (!connectionString) throw new Error('Missing DATABASE_URL env variable');\n\n  const pgClient = new Client({\n    connectionString,\n    ssl: { rejectUnauthorized: false }\n  });\n  \n  await pgClient.connect();\n  const upserted = [];\n\n  try {\n    // Query joining insights, mapping, and analytics\n    const query = `\n      SELECT \n        i.platform_post_id,\n        i.platform,\n        i.published_at,\n        i.reach,\n        i.likes,\n        i.comments,\n        i.shares,\n        i.saves,\n        m.product_category,\n        m.product_ref,\n        m.product_name,\n        a.classification,\n        a.breakout_score\n      FROM post_performance_insights i\n      LEFT JOIN post_product_mapping m ON i.platform_post_id = m.platform_post_id\n      LEFT JOIN post_performance_analytics a ON i.platform_post_id = a.platform_post_id;\n    `;\n\n    const res = await pgClient.query(query);\n    const rows = res.rows;\n\n    // Group by (category, platform)\n    const groups = {};\n    for (const row of rows) {\n      const cat = row.product_category || 'UNMAPPED';\n      const plat = row.platform;\n      const key = `${cat}||${plat}`;\n      \n      if (!groups[key]) {\n        groups[key] = {\n          category: cat,\n          platform: plat,\n          posts: []\n        };\n      }\n      groups[key].posts.push(row);\n    }\n\n    // Calculate metrics for each group\n    for (const key of Object.keys(groups)) {\n      const g = groups[key];\n      const postCount = g.posts.length;\n      \n      const reachValues = g.posts.map(p => p.reach).filter(v => v !== null && v !== undefined);\n      const sharesValues = g.posts.map(p => p.shares).filter(v => v !== null && v !== undefined);\n      const savesValues = g.posts.map(p => p.saves).filter(v => v !== null && v !== undefined);\n      \n      const interactionValues = g.posts.map(p => {\n        if (g.platform === 'INSTAGRAM') {\n          return (p.likes || 0) + (p.comments || 0) + (p.shares || 0) + (p.saves || 0);\n        } else {\n          return (p.likes || 0) + (p.comments || 0) + (p.shares || 0);\n        }\n      });\n\n      const medReach = median(reachValues);\n      const medInteractions = median(interactionValues);\n      const medShares = median(sharesValues);\n      const medSaves = median(savesValues);\n\n      const breakoutCount = g.posts.filter(p => p.classification === 'BREAKOUT').length;\n      const breakoutRate = postCount > 0 ? parseFloat((breakoutCount / postCount).toFixed(2)) : 0.00;\n      \n      const scoreValues = g.posts.map(p => parseFloat(p.breakout_score || 0)).filter(v => !isNaN(v));\n      const avgBreakoutScore = scoreValues.length > 0 \n        ? parseFloat((scoreValues.reduce((sum, v) => sum + v, 0) / scoreValues.length).toFixed(2))\n        : 0.00;\n\n      // Confidence/Data Status classification\n      let confidenceStatus = 'INSUFFICIENT_DATA';\n      if (g.category === 'UNMAPPED') {\n        confidenceStatus = 'INSUFFICIENT_DATA';\n      } else if (postCount < MIN_CATEGORY_POSTS) {\n        confidenceStatus = 'INSUFFICIENT_DATA';\n      } else {\n        if (breakoutRate >= 0.33) {\n          confidenceStatus = 'STRONG_SIGNAL';\n        } else if (breakoutRate > 0.0) {\n          confidenceStatus = 'ABOVE_AVERAGE_SIGNAL';\n        } else if (avgBreakoutScore >= 1.2) {\n          confidenceStatus = 'EMERGING_SIGNAL';\n        } else {\n          confidenceStatus = 'NORMAL_SIGNAL';\n        }\n      }\n\n      // If it's a real category (not UNMAPPED), upsert into category_performance_analytics\n      if (g.category !== 'UNMAPPED') {\n        const upsertSql = `\n          INSERT INTO category_performance_analytics (\n            product_category, platform, post_count,\n            median_reach, median_interactions, median_shares, median_saves,\n            breakout_count, breakout_rate, confidence_status, updated_at\n          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())\n          ON CONFLICT (product_category, platform) DO UPDATE SET\n            post_count = EXCLUDED.post_count,\n            median_reach = EXCLUDED.median_reach,\n            median_interactions = EXCLUDED.median_interactions,\n            median_shares = EXCLUDED.median_shares,\n            median_saves = EXCLUDED.median_saves,\n            breakout_count = EXCLUDED.breakout_count,\n            breakout_rate = EXCLUDED.breakout_rate,\n            confidence_status = EXCLUDED.confidence_status,\n            updated_at = now()\n          RETURNING id;\n        `;\n        \n        const values = [\n          g.category, g.platform, postCount,\n          medReach, medInteractions, medShares, medSaves,\n          breakoutCount, breakoutRate, confidenceStatus\n        ];\n        \n        const dbRes = await pgClient.query(upsertSql, values);\n        upserted.push({ category: g.category, platform: g.platform, dbId: dbRes.rows[0].id });\n      }\n    }\n  } catch (err) {\n    console.error('Error running category analytics:', err.message);\n    throw err;\n  } finally {\n    await pgClient.end();\n  }\n\n  return [{ json: { success: true, count: upserted.length, upserted } }];\n}"
+      },
+      "id": "e2f7c03c-b2ef-4c12-9213-90ac3f4b23ef",
+      "name": "Code - Daily Category Performance Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        250
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger - 1x Daily (03:00 UTC)": {
+      "main": [
+        [
+          {
+            "node": "Code - Daily Category Performance Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "Asia/Kolkata"
+  }
+}

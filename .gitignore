@@ -27,3 +27,11 @@ Thumbs.db
 *.ntvs*
 *.njsproj
 *.sln
+
+# Backups and temporary run/scratch files
+.env.backup*
+*.bak
+temp_run_tests.js
+scratch/
+n8n_state.json
+

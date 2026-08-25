@@ -1,0 +1,55 @@
+{
+  "name": "AME Bazaar - Growth Memory Collector",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 1 * * *"
+            }
+          ]
+        }
+      },
+      "id": "c1f7a08b-621f-490b-93f5-bfcae1823ab9",
+      "name": "Schedule Trigger - 1x Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { Client } = require('pg');\nconst https = require('https');\n\nconst connectionString = process.env.DATABASE_URL;\nconst token = process.env.META_ACCESS_TOKEN;\nconst pageId = \"336149813181434\";\nconst igId = \"17841408534957987\";\n\nfunction get(url) {\n  return new Promise((resolve, reject) => {\n    https.get(url, (res) => {\n      let data = '';\n      res.on('data', (chunk) => data += chunk);\n      res.on('end', () => {\n        try {\n          resolve(JSON.parse(data));\n        } catch (e) {\n          resolve({ error: 'Failed to parse JSON', raw: data });\n        }\n      });\n    }).on('error', reject);\n  });\n}\n\nasync function main() {\n  if (!connectionString) throw new Error('Missing DATABASE_URL env variable');\n  if (!token) throw new Error('Missing META_ACCESS_TOKEN env variable');\n\n  const pgClient = new Client({\n    connectionString,\n    ssl: { rejectUnauthorized: false }\n  });\n  \n  await pgClient.connect();\n  const upserted = [];\n\n  // Instagram Media Insights\n  try {\n    const igMediaRes = await get(`https://graph.facebook.com/v25.0/${igId}/media?fields=id,caption,timestamp,media_type&limit=20&access_token=${token}`);\n    if (igMediaRes.data) {\n      for (const media of igMediaRes.data) {\n        let reach = null, saves = null, likes = null, comments = null, shares = null, totalInteractions = null;\n        let status = 'SUCCESS', errorMsg = null;\n\n        try {\n          const insights = await get(`https://graph.facebook.com/v25.0/${media.id}/insights?metric=reach,saved,likes,comments,shares,total_interactions&access_token=${token}`);\n          if (insights.data) {\n            insights.data.forEach(metric => {\n              const val = metric.values[0]?.value ?? null;\n              if (metric.name === 'reach') reach = val;\n              else if (metric.name === 'saved') saves = val;\n              else if (metric.name === 'likes') likes = val;\n              else if (metric.name === 'comments') comments = val;\n              else if (metric.name === 'shares') shares = val;\n              else if (metric.name === 'total_interactions') totalInteractions = val;\n            });\n          } else if (insights.error) {\n            status = 'ERROR';\n            errorMsg = insights.error.message;\n          }\n        } catch (e) {\n          status = 'ERROR';\n          errorMsg = e.message;\n        }\n\n        const query = `\n          INSERT INTO post_performance_insights (\n            platform_post_id, platform, published_at, media_type, caption,\n            reach, saves, likes, comments, shares, total_interactions,\n            collection_status, error_message, collected_at\n          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now())\n          ON CONFLICT (platform_post_id) DO UPDATE SET\n            reach = EXCLUDED.reach,\n            saves = EXCLUDED.saves,\n            likes = EXCLUDED.likes,\n            comments = EXCLUDED.comments,\n            shares = EXCLUDED.shares,\n            total_interactions = EXCLUDED.total_interactions,\n            collection_status = EXCLUDED.collection_status,\n            error_message = EXCLUDED.error_message,\n            collected_at = now()\n          RETURNING id;\n        `;\n        const values = [\n          media.id, 'INSTAGRAM', media.timestamp, media.media_type, media.caption || null,\n          reach, saves, likes, comments, shares, totalInteractions, status, errorMsg\n        ];\n        const res = await pgClient.query(query, values);\n        upserted.push({ id: media.id, dbId: res.rows[0].id, platform: 'INSTAGRAM' });\n      }\n    }\n  } catch (e) {\n    console.error('Error fetching Instagram media:', e.message);\n  }\n\n  // Facebook Page Post Insights\n  try {\n    const fbPostsRes = await get(`https://graph.facebook.com/v25.0/${pageId}/posts?fields=id,message,created_time,shares,comments.summary(true).limit(0),reactions.summary(true).limit(0)&limit=20&access_token=${token}`);\n    if (fbPostsRes.data) {\n      for (const post of fbPostsRes.data) {\n        const commentsCount = post.comments?.summary?.total_count ?? 0;\n        const reactionsCount = post.reactions?.summary?.total_count ?? 0;\n        const sharesCount = post.shares?.count ?? 0;\n        let reach = null, impressions = null;\n        let status = 'SUCCESS', errorMsg = null;\n\n        try {\n          const insights = await get(`https://graph.facebook.com/v25.0/${post.id}/insights?metric=post_impressions_unique,post_impressions&access_token=${token}`);\n          if (insights.data) {\n            insights.data.forEach(metric => {\n              const val = metric.values[0]?.value ?? null;\n              if (metric.name === 'post_impressions_unique') reach = val;\n              else if (metric.name === 'post_impressions') impressions = val;\n            });\n          } else if (insights.error) {\n            status = 'ERROR';\n            errorMsg = insights.error.message;\n          }\n        } catch (e) {\n          status = 'ERROR';\n          errorMsg = e.message;\n        }\n\n        const query = `\n          INSERT INTO post_performance_insights (\n            platform_post_id, platform, published_at, caption,\n            reach, impressions, comments, likes, shares,\n            collection_status, error_message, collected_at\n          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())\n          ON CONFLICT (platform_post_id) DO UPDATE SET\n            reach = EXCLUDED.reach,\n            impressions = EXCLUDED.impressions,\n            comments = EXCLUDED.comments,\n            likes = EXCLUDED.likes,\n            shares = EXCLUDED.shares,\n            collection_status = EXCLUDED.collection_status,\n            error_message = EXCLUDED.error_message,\n            collected_at = now()\n          RETURNING id;\n        `;\n        const values = [\n          post.id, 'FACEBOOK', post.created_time, post.message || null,\n          reach, impressions, commentsCount, reactionsCount, sharesCount, status, errorMsg\n        ];\n        const res = await pgClient.query(query, values);\n        upserted.push({ id: post.id, dbId: res.rows[0].id, platform: 'FACEBOOK' });\n      } \n    }\n  } catch (e) {\n    console.error('Error fetching Facebook posts:', e.message);\n  }\n\n  await pgClient.end();\n  return [{ json: { success: true, count: upserted.length, upserted } }];\n}"
+      },
+      "id": "e2f7c03c-b2ef-4c12-9213-90ac3f4b23ef",
+      "name": "Code - Growth Memory Collector",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        250
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger - 1x Daily": {
+      "main": [
+        [
+          {
+            "node": "Code - Growth Memory Collector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "Asia/Kolkata"
+  }
+}

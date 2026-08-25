@@ -72,6 +72,9 @@ function setupConfig() {
   Logger.log("9. CLOUDINARY_CLOUD_NAME     : Cloudinary Cloud Name (for Instagram Public Image URL)");
   Logger.log("10. CLOUDINARY_UPLOAD_PRESET : Cloudinary Unsigned Upload Preset");
   Logger.log("11. TEST_MODE                : 'true' (safety mode, no real posts) or 'false' (live publishing)");
+  Logger.log("12. DB_URL                   : Supabase JDBC connection URL");
+  Logger.log("13. DB_USER                  : Supabase database user name");
+  Logger.log("14. DB_PASS                  : Supabase database password");
   Logger.log("\nCurrent Config State:");
   Logger.log(JSON.stringify(Config.getConfig(), null, 2));
   Logger.log("==================================================");

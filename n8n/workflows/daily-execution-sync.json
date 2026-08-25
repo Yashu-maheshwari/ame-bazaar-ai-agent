@@ -1,0 +1,55 @@
+{
+  "name": "AME - Daily Execution Bridge Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "i6f7a08b-621f-490b-93f5-bfcae1823ab9",
+      "name": "Schedule Trigger - 1x Daily (06:00 UTC)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { Client } = require('pg');\n\nconst connectionString = process.env.DATABASE_URL;\nconst AUTOPUBLISH_KILL_SWITCH = true;\n\nasync function main() {\n  if (!connectionString) throw new Error('Missing DATABASE_URL env variable');\n\n  const pgClient = new Client({\n    connectionString,\n    ssl: { rejectUnauthorized: false }\n  });\n  \n  await pgClient.connect();\n\n  try {\n    const todayDate = new Date().toISOString().split('T')[0];\n    const query = 'SELECT p.id as plan_id, p.plan_date, p.content_plan_id, p.product_ref, p.product_name, p.product_category, p.platform, p.format, p.hook, p.angle, p.local_angle, p.cta, p.strategy_reason, p.confidence, r.google_drive_file_id, r.resolution_status, r.resolution_reason FROM daily_content_plans p LEFT JOIN file_id_resolutions r ON p.id = r.plan_id WHERE p.plan_date = $1;';\n    \n    const res = await pgClient.query(query, [todayDate]);\n    const plans = res.rows;\n    const upserted = [];\n\n    for (const plan of plans) {\n      const executionId = 'exec_' + plan.plan_id;\n      let resolutionStatus = plan.resolution_status || 'ERROR';\n      let gdriveId = plan.google_drive_file_id;\n      let errorMessage = null;\n\n      if (resolutionStatus === 'RESOLVED') {\n        if (!gdriveId) {\n          resolutionStatus = 'ERROR';\n          errorMessage = 'RESOLUTION_ERROR: Resolved status but missing file ID';\n        }\n      } else if (resolutionStatus === 'NO_ASSET_REQUESTED') {\n        errorMessage = 'ASSET_REQUIRED';\n      } else if (resolutionStatus === 'MISSING_ASSET') {\n        errorMessage = 'ASSET_MISSING';\n      } else if (resolutionStatus === 'AMBIGUOUS_ASSET') {\n        errorMessage = 'ASSET_AMBIGUOUS';\n      } else {\n        errorMessage = 'RESOLUTION_ERROR';\n      }\n\n      let score = 0;\n      if (resolutionStatus === 'RESOLVED' && gdriveId) score += 20;\n\n      const validPlatforms = ['INSTAGRAM', 'FACEBOOK', 'BOTH'];\n      if (validPlatforms.includes(plan.platform)) score += 10;\n\n      const validFormats = ['REEL', 'IMAGE', 'CAROUSEL'];\n      if (validFormats.includes(plan.format)) score += 10;\n\n      if (plan.hook && plan.hook.trim().length > 0) score += 15;\n      if (plan.cta && plan.cta.trim().length > 0) score += 15;\n      if (plan.strategy_reason && plan.strategy_reason.trim().length > 0) score += 10;\n      if (plan.product_ref && plan.product_name && plan.product_category) score += 10;\n      if (plan.local_angle && plan.local_angle.trim().length > 0) score += 10;\n\n      let approvalStatus = 'NEEDS_REVIEW';\n      let execStatus = 'QUALITY_CHECK';\n\n      if (score >= 80 && !errorMessage) {\n        approvalStatus = 'APPROVED_FOR_AUTOPUBLISH';\n        execStatus = 'APPROVED_FOR_AUTOPUBLISH';\n      } else {\n        if (errorMessage) {\n          execStatus = errorMessage;\n        }\n      }\n\n      const upsertSql = 'INSERT INTO content_execution_queue (execution_id, plan_date, content_plan_id, product_ref, product_name, product_category, platform, format, hook, angle, local_angle, cta, strategy_reason, google_drive_file_id, resolution_status, execution_status, quality_score, quality_status, approval_status, created_at, updated_at, error_message) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, now(), now(), $20) ON CONFLICT (plan_date, content_plan_id) DO UPDATE SET execution_id = EXCLUDED.execution_id, product_ref = EXCLUDED.product_ref, product_name = EXCLUDED.product_name, product_category = EXCLUDED.product_category, platform = EXCLUDED.platform, format = EXCLUDED.format, hook = EXCLUDED.hook, angle = EXCLUDED.angle, local_angle = EXCLUDED.local_angle, cta = EXCLUDED.cta, strategy_reason = EXCLUDED.strategy_reason, google_drive_file_id = EXCLUDED.google_drive_file_id, resolution_status = EXCLUDED.resolution_status, execution_status = EXCLUDED.execution_status, quality_score = EXCLUDED.quality_score, quality_status = EXCLUDED.quality_status, approval_status = EXCLUDED.approval_status, updated_at = now(), error_message = EXCLUDED.error_message RETURNING id;';\n      \n      const dbRes = await pgClient.query(upsertSql, [\n        executionId,\n        todayDate,\n        plan.content_plan_id,\n        plan.product_ref,\n        plan.product_name,\n        plan.product_category,\n        plan.platform,\n        plan.format,\n        plan.hook,\n        plan.angle,\n        plan.local_angle,\n        plan.cta,\n        plan.strategy_reason,\n        gdriveId,\n        resolutionStatus,\n        execStatus,\n        score,\n        score >= 80 ? 'PASSED' : 'FAILED',\n        approvalStatus,\n        errorMessage\n      ]);\n\n      upserted.push({ slotId: plan.content_plan_id, score, approvalStatus, execStatus });\n    }\n\n    await pgClient.end();\n    return [{ json: { success: true, count: upserted.length, killSwitch: AUTOPUBLISH_KILL_SWITCH, executions: upserted } }];\n  } catch (err) {\n    await pgClient.end();\n    throw err;\n  }\n}"
+      },
+      "id": "e2f7c03c-b2ef-4c12-9213-90ac3f4b23ef",
+      "name": "Code - Daily Execution Bridge Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        250
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger - 1x Daily (06:00 UTC)": {
+      "main": [
+        [
+          {
+            "node": "Code - Daily Execution Bridge Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "Asia/Kolkata"
+  }
+}

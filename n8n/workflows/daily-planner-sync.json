@@ -1,0 +1,55 @@
+{
+  "name": "AME - Daily Content Planner Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 5 * * *"
+            }
+          ]
+        }
+      },
+      "id": "g6f7a08b-621f-490b-93f5-bfcae1823ab9",
+      "name": "Schedule Trigger - 1x Daily (05:00 UTC)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { Client } = require('pg');\nconst https = require('https');\nconst fs = require('fs');\n\nconst connectionString = process.env.DATABASE_URL;\nconst geminiApiKey = process.env.GEMINI_API_KEY;\nconst statePath = 'C:/Users/user/.gemini/antigravity/scratch/ame-bazaar-ai-agent/n8n_state.json';\n\nfunction postJson(url, data) {\n  return new Promise((resolve, reject) => {\n    const urlObj = new URL(url);\n    const body = JSON.stringify(data);\n    \n    const options = {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'Content-Length': Buffer.byteLength(body)\n      }\n    };\n    \n    const req = https.request(urlObj, options, (res) => {\n      let responseBody = '';\n      res.on('data', chunk => responseBody += chunk);\n      res.on('end', () => {\n        try {\n          resolve({ statusCode: res.statusCode, body: JSON.parse(responseBody), raw: responseBody });\n        } catch (e) {\n          resolve({ statusCode: res.statusCode, error: 'Failed to parse JSON', raw: responseBody });\n        }\n      });\n    });\n    \n    req.on('error', reject);\n    req.write(body);\n    req.end();\n  });\n}\n\nasync function main() {\n  if (!connectionString) throw new Error('Missing DATABASE_URL env variable');\n  if (!geminiApiKey) throw new Error('Missing GEMINI_API_KEY env variable');\n\n  const pgClient = new Client({\n    connectionString,\n    ssl: { rejectUnauthorized: false }\n  });\n  \n  await pgClient.connect();\n\n  try {\n    const strategyRes = await pgClient.query('SELECT * FROM growth_strategy_recommendations ORDER BY strategy_date DESC LIMIT 1;');\n    if (strategyRes.rows.length === 0) {\n      throw new Error('No growth strategy recommendations found in database.');\n    }\n    const strategyRow = strategyRes.rows[0];\n    const strategyDate = strategyRow.strategy_date.toISOString().split('T')[0];\n    const strategyRec = strategyRow.recommendation;\n\n    let queueState = {};\n    if (fs.existsSync(statePath)) {\n      try {\n        queueState = JSON.parse(fs.readFileSync(statePath, 'utf8'));\n      } catch (e) {}\n    }\n\n    const promptData = {\n      strategyDate,\n      strategyConfidence: strategyRow.confidence,\n      strategyRecommendation: strategyRec,\n      queueState\n    };\n\n    const systemInstructions = 'You are the Autonomous Daily Content Planner v1 for AME Bazaar in Kirari, Delhi. Convert the provided growth strategy recommendations and available queue slots into a concrete, executable daily content plan. Focus on driving physical store footfall (local customer discovery). Do NOT fabricate file paths or filenames. Match files to slots based on queueState. If confidence is LOW, label all plan confidence levels as LOW.';\n\n    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + geminiApiKey;\n    const payload = {\n      contents: [\n        {\n          role: 'user',\n          parts: [\n            { text: systemInstructions },\n            { text: 'Data Context:\\n' + JSON.stringify(promptData) }\n          ]\n        }\n      ],\n      generationConfig: {\n        temperature: 0.1,\n        responseMimeType: 'application/json'\n      }\n    };\n\n    const response = await postJson(url, payload);\n    if (response.statusCode < 200 || response.statusCode >= 300) {\n      throw new Error('Gemini API responded with code ' + response.statusCode + ': ' + response.raw);\n    }\n\n    const result = response.body;\n    const candidates = result.candidates || [];\n    let rawText = '';\n    if (candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {\n      rawText = candidates[0].content.parts.map(p => p.text || '').join('\\n').trim();\n    }\n\n    if (!rawText) throw new Error('Empty response from Gemini.');\n\n    const plansArray = JSON.parse(rawText.replace(/^```json\\n?/, '').replace(/\\n?```$/, '').trim());\n    const todayDate = new Date().toISOString().split('T')[0];\n    const upserted = [];\n\n    for (const plan of plansArray) {\n      const upsertSql = 'INSERT INTO daily_content_plans (plan_date, content_plan_id, product_ref, product_name, product_category, content_asset_ref, platform, format, hook, angle, local_angle, cta, strategy_reason, confidence, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now()) ON CONFLICT (plan_date, content_plan_id) DO UPDATE SET product_ref = EXCLUDED.product_ref, product_name = EXCLUDED.product_name, product_category = EXCLUDED.product_category, content_asset_ref = EXCLUDED.content_asset_ref, platform = EXCLUDED.platform, format = EXCLUDED.format, hook = EXCLUDED.hook, angle = EXCLUDED.angle, local_angle = EXCLUDED.local_angle, cta = EXCLUDED.cta, strategy_reason = EXCLUDED.strategy_reason, confidence = EXCLUDED.confidence, status = EXCLUDED.status, created_at = now() RETURNING id;';\n      \n      const dbRes = await pgClient.query(upsertSql, [\n        todayDate,\n        plan.content_plan_id,\n        plan.product_ref,\n        plan.product_name,\n        plan.product_category,\n        plan.content_asset_ref === 'N/A' || !plan.content_asset_ref ? null : plan.content_asset_ref,\n        plan.platform,\n        plan.format,\n        plan.hook,\n        plan.angle,\n        plan.local_angle,\n        plan.cta,\n        plan.strategy_reason,\n        plan.confidence,\n        plan.status\n      ]);\n      upserted.push({ slotId: plan.content_plan_id, dbId: dbRes.rows[0].id });\n    }\n\n    await pgClient.end();\n    return [{ json: { success: true, count: upserted.length, upserted } }];\n  } catch (err) {\n    await pgClient.end();\n    throw err;\n  }\n}"
+      },
+      "id": "e2f7c03c-b2ef-4c12-9213-90ac3f4b23ef",
+      "name": "Code - Daily Content Planner Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        250
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger - 1x Daily (05:00 UTC)": {
+      "main": [
+        [
+          {
+            "node": "Code - Daily Content Planner Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "Asia/Kolkata"
+  }
+}

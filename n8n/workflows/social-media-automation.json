@@ -133,7 +133,7 @@
       },
       {
         "parameters": {
-          "jsCode": "return [{\n  json: {\n    cloudinaryPosterUrl: \"https://res.cloudinary.com/demo/image/upload/sample.jpg\",\n    publicId: \"test_public_id\",\n    baseImageUrl: \"https://res.cloudinary.com/demo/image/upload/sample.jpg\"\n  }\n}];"
+          "jsCode": "const cloudName = $env.CLOUDINARY_CLOUD_NAME;\nconst logoId = ($env.CLOUDINARY_LOGO_PUBLIC_ID || '').replace(/\\//g, ':');\nconst publicId = $json.public_id;\n\nif (!cloudName) throw new Error('Missing CLOUDINARY_CLOUD_NAME');\nif (!logoId) throw new Error('Missing CLOUDINARY_LOGO_PUBLIC_ID');\nif (!publicId) throw new Error('Cloudinary upload did not return public_id');\n\nconst posterUrl =\n  `https://res.cloudinary.com/${cloudName}/image/upload/`\n  + `e_improve,q_auto,f_auto,c_fill,g_auto,w_1080,h_1350/`\n  + `l_${logoId},w_220,g_south_east,x_40,y_40/fl_layer_apply/`\n  + `${publicId}`;\n\nreturn [{\n  json: {\n    ...$json,\n    cloudinaryPosterUrl: posterUrl,\n    publicId,\n    baseImageUrl: $json.secure_url\n  }\n}];"
         },
         "id": "79bc2917",
         "name": "Code - Build Poster URL",
@@ -499,7 +499,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const fs = require('fs');\nconst statePath = 'C:\\\\Users\\\\user\\\\.gemini\\\\antigravity\\\\scratch\\\\ame-bazaar-ai-agent\\\\n8n_state.json';\n\nconst matchedSlot = $node['Code - Daily Queue Coordinator']?.json?.matchedSlot;\n\nif (matchedSlot && fs.existsSync(statePath)) {\n  try {\n    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));\n    if (state.dailyPlan && state.dailyPlan.slots[matchedSlot]) {\n      state.dailyPlan.slots[matchedSlot].status = 'completed';\n      fs.writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf8');\n      console.log(\`Slot \${matchedSlot} marked as completed.\`);\n    }\n  } catch (e) {}\n}\n\nreturn [{ json: { success: true } }];"
+          "jsCode": "const fs = require('fs');\nconst statePath = 'C:\\\\Users\\\\user\\\\.gemini\\\\antigravity\\\\scratch\\\\ame-bazaar-ai-agent\\\\n8n_state.json';\n\nconst matchedSlot = $node['Code - Daily Queue Coordinator']?.json?.matchedSlot;\n\nif (matchedSlot && fs.existsSync(statePath)) {\n  try {\n    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));\n    if (state.dailyPlan && state.dailyPlan.slots[matchedSlot]) {\n      state.dailyPlan.slots[matchedSlot].status = 'completed';\n      fs.writeFileSync(statePath, JSON.stringify(state, null, 2), 'utf8');\n      console.log(`Slot ${matchedSlot} marked as completed.`);\n    }\n  } catch (e) {}\n}\n\nreturn [{ json: { success: true } }];"
         },
         "id": "update-state-node-id",
         "name": "Code - Update State",

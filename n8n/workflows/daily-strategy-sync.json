@@ -1,0 +1,55 @@
+{
+  "name": "AME - Daily Growth Strategy Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "f6f7a08b-621f-490b-93f5-bfcae1823ab9",
+      "name": "Schedule Trigger - 1x Daily (04:00 UTC)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { Client } = require('pg');\nconst https = require('https');\n\nconst connectionString = process.env.DATABASE_URL;\nconst geminiApiKey = process.env.GEMINI_API_KEY;\n\nfunction postJson(url, data) {\n  return new Promise((resolve, reject) => {\n    const urlObj = new URL(url);\n    const body = JSON.stringify(data);\n    \n    const options = {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'Content-Length': Buffer.byteLength(body)\n      }\n    };\n    \n    const req = https.request(urlObj, options, (res) => {\n      let responseBody = '';\n      res.on('data', chunk => responseBody += chunk);\n      res.on('end', () => {\n        try {\n          resolve({ statusCode: res.statusCode, body: JSON.parse(responseBody), raw: responseBody });\n        } catch (e) {\n          resolve({ statusCode: res.statusCode, error: 'Failed to parse JSON', raw: responseBody });\n        }\n      });\n    });\n    \n    req.on('error', reject);\n    req.write(body);\n    req.end();\n  });\n}\n\nasync function main() {\n  if (!connectionString) throw new Error('Missing DATABASE_URL env variable');\n  if (!geminiApiKey) throw new Error('Missing GEMINI_API_KEY env variable');\n\n  const pgClient = new Client({\n    connectionString,\n    ssl: { rejectUnauthorized: false }\n  });\n  \n  await pgClient.connect();\n\n  try {\n    const insightsRes = await pgClient.query('SELECT i.*, m.product_category, m.product_name, m.product_ref, a.classification, a.breakout_score FROM post_performance_insights i LEFT JOIN post_product_mapping m ON i.platform_post_id = m.platform_post_id LEFT JOIN post_performance_analytics a ON i.platform_post_id = a.platform_post_id ORDER BY i.published_at DESC;');\n    const categoryRes = await pgClient.query('SELECT * FROM category_performance_analytics;');\n\n    const posts = insightsRes.rows;\n    const categories = categoryRes.rows;\n\n    const promptData = {\n      businessName: 'AME Bazaar',\n      location: 'Kirari, Delhi',\n      objective: 'Increase qualified physical store footfall and local customer discovery.',\n      historicalPosts: posts.map(p => ({\n        platform: p.platform,\n        published_at: p.published_at,\n        reach: p.reach,\n        likes: p.likes,\n        comments: p.comments,\n        shares: p.shares,\n        saves: p.saves,\n        category: p.product_category || 'UNMAPPED',\n        product_name: p.product_name || 'N/A',\n        classification: p.classification || 'INSUFFICIENT_DATA'\n      })),\n      categoryAnalytics: categories\n    };\n\n    const systemInstructions = 'You are the Autonomous Growth Strategy Brain v1 for AME Bazaar in Kirari, Delhi. Generate a structured Daily Organic Growth Strategy. Focus on driving physical store footfall (local customer discovery). Return a JSON object conforming exactly to this structure: { \"current_situation\": \"Text summary.\", \"winners\": \"Text summary.\", \"weak_signals\": \"Text description.\", \"recommended_mix\": { \"WOMEN\": \"40%\", \"MEN\": \"30%\", \"BOYS\": \"30%\" }, \"content_ideas\": [ { \"category_product\": \"WOMEN\", \"format\": \"REEL\", \"hook\": \"Hinglish hook\", \"customer_problem\": \"Problem solved\", \"cta\": \"WhatsApp CTA\", \"evidence\": \"Citing data or exploration need\" } ], \"experiments\": [\"Experiment 1\"], \"learning_priorities\": [\"Priority 1\"], \"confidence\": \"LOW or MEDIUM or HIGH\", \"footfall_strategy\": \"Footfall strategy text.\" } Keep all descriptions brief and concise to prevent any API output limits. Do NOT wrap the JSON in Markdown formatting (no backticks).';\n\n    const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + geminiApiKey;\n    const payload = {\n      contents: [\n        {\n          role: 'user',\n          parts: [\n            { text: systemInstructions },\n            { text: 'Data Context:\\n' + JSON.stringify(promptData) }\n          ]\n        }\n      ],\n      generationConfig: {\n        temperature: 0.1,\n        responseMimeType: 'application/json'\n      }\n    };\n\n    const response = await postJson(url, payload);\n    if (response.statusCode < 200 || response.statusCode >= 300) {\n      throw new Error('Gemini API responded with code ' + response.statusCode + ': ' + response.raw);\n    }\n\n    const result = response.body;\n    const candidates = result.candidates || [];\n    let rawText = '';\n    if (candidates.length > 0 && candidates[0].content && candidates[0].content.parts) {\n      rawText = candidates[0].content.parts.map(p => p.text || '').join('\\n').trim();\n    }\n\n    if (!rawText) throw new Error('Empty response from Gemini.');\n\n    const parsedStrategy = JSON.parse(rawText.replace(/^```json\\n?/, '').replace(/\\n?```$/, '').trim());\n    const todayDate = new Date().toISOString().split('T')[0];\n\n    const upsertSql = 'INSERT INTO growth_strategy_recommendations (strategy_date, recommendation, confidence, evidence, created_at) VALUES ($1, $2, $3, $4, now()) ON CONFLICT (strategy_date) DO UPDATE SET recommendation = EXCLUDED.recommendation, confidence = EXCLUDED.confidence, evidence = EXCLUDED.evidence, created_at = now() RETURNING id;';\n\n    const dbRes = await pgClient.query(upsertSql, [\n      todayDate,\n      parsedStrategy,\n      parsedStrategy.confidence,\n      JSON.stringify(promptData)\n    ]);\n\n    await pgClient.end();\n    return [{ json: { success: true, strategy_date: todayDate, dbId: dbRes.rows[0].id } }];\n  } catch (err) {\n    await pgClient.end();\n    throw err;\n  }\n}"
+      },
+      "id": "e2f7c03c-b2ef-4c12-9213-90ac3f4b23ef",
+      "name": "Code - Daily Growth Strategy Sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        250
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger - 1x Daily (04:00 UTC)": {
+      "main": [
+        [
+          {
+            "node": "Code - Daily Growth Strategy Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "Asia/Kolkata"
+  }
+}
